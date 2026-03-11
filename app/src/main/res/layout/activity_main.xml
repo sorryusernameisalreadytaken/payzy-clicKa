@@ -61,12 +61,40 @@
         android:layout_marginTop="16dp"
         android:text="@string/button_save" />
 
-    <!-- Button to trigger the login automation -->
+    <!-- Buttons to trigger the login automation using different approaches -->
     <Button
-        android:id="@+id/button_login"
+        android:id="@+id/button_login1"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:text="@string/button_login" />
+        android:text="@string/button_login1" />
+
+    <Button
+        android:id="@+id/button_login2"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/button_login2" />
+
+    <Button
+        android:id="@+id/button_login3"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/button_login3" />
+
+    <Button
+        android:id="@+id/button_login4"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/button_login4" />
+
+    <Button
+        android:id="@+id/button_login5"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/button_login5" />
 
 </LinearLayout>

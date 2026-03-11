@@ -39,15 +39,17 @@ public class MainActivity extends AppCompatActivity {
         android.widget.EditText editPassword = findViewById(R.id.edit_password);
         android.widget.EditText editPin = findViewById(R.id.edit_pin);
         Button saveButton = findViewById(R.id.button_save_credentials);
-        Button loginButton = findViewById(R.id.button_login);
+        Button loginButton1 = findViewById(R.id.button_login1);
+        Button loginButton2 = findViewById(R.id.button_login2);
+        Button loginButton3 = findViewById(R.id.button_login3);
+        Button loginButton4 = findViewById(R.id.button_login4);
+        Button loginButton5 = findViewById(R.id.button_login5);
 
         // Pre-populate fields with stored values if available
         String savedUsername = PrefsHelper.getUsername(this);
-        if (savedUsername == null || savedUsername.isEmpty()) {
-            // Provide a sensible default as requested
-            savedUsername = "daniDee";
+        if (savedUsername != null && !savedUsername.isEmpty()) {
+            editUsername.setText(savedUsername);
         }
-        editUsername.setText(savedUsername);
         editPassword.setText(PrefsHelper.getPassword(this));
         editPin.setText(PrefsHelper.getPin(this));
 
@@ -122,25 +124,41 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // Handle login automation
-        loginButton.setOnClickListener(new View.OnClickListener() {
+        // Handle login automation using five different approaches
+        View.OnClickListener loginClickListener = new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                // Retrieve current credentials from preferences
                 String username = editUsername.getText().toString();
                 String password = editPassword.getText().toString();
-                // Optionally save current values before login
+                // Persist credentials for later reuse
                 PrefsHelper.setUsername(MainActivity.this, username);
                 PrefsHelper.setPassword(MainActivity.this, password);
-                // Obtain running service instance to perform login
                 AccessibilityLoggerService service = AccessibilityLoggerService.getInstance();
-                if (service != null) {
-                    service.performLogin(username, password);
-                } else {
+                if (service == null) {
                     Toast.makeText(MainActivity.this, "Dienst nicht aktiv", Toast.LENGTH_SHORT).show();
+                    return;
                 }
+                int approach;
+                int id = v.getId();
+                if (id == R.id.button_login1) {
+                    approach = 1;
+                } else if (id == R.id.button_login2) {
+                    approach = 2;
+                } else if (id == R.id.button_login3) {
+                    approach = 3;
+                } else if (id == R.id.button_login4) {
+                    approach = 4;
+                } else {
+                    approach = 5;
+                }
+                service.performLoginApproach(approach, username, password);
             }
-        });
+        };
+        loginButton1.setOnClickListener(loginClickListener);
+        loginButton2.setOnClickListener(loginClickListener);
+        loginButton3.setOnClickListener(loginClickListener);
+        loginButton4.setOnClickListener(loginClickListener);
+        loginButton5.setOnClickListener(loginClickListener);
     }
 
     /**

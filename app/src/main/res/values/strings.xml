@@ -15,6 +15,12 @@
     <string name="hint_pin">PIN</string>
     <string name="button_save">Speichern</string>
     <string name="button_login">Login</string>
+    <!-- Labels for different login approaches -->
+    <string name="button_login1">Login 1</string>
+    <string name="button_login2">Login 2</string>
+    <string name="button_login3">Login 3</string>
+    <string name="button_login4">Login 4</string>
+    <string name="button_login5">Login 5</string>
     <string name="saved_successfully">Gespeichert</string>
 
     <!-- Toast messages -->
