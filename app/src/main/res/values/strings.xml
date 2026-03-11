@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Application name displayed in the launcher and system UI -->
+    <string name="app_name">Payzy clicKa</string>
+
+    <!-- Labels for buttons on the main screen -->
+    <string name="button_accessibility">Zugänglichkeit</string>
+    <string name="button_permission">Speicherberechtigung</string>
+    <string name="button_record_start">Aufnahme starten</string>
+    <string name="button_record_stop">Aufnahme stoppen</string>
+
+    <!-- Toast messages -->
+    <string name="permission_granted">Schreibzugriff erteilt</string>
+    <string name="permission_denied">Schreibzugriff verweigert</string>
+    <string name="permission_already_granted">Schreibzugriff bereits gewährt</string>
+
+    <!-- Accessibility service metadata -->
+    <string name="accessibility_service_label">Payzy clicKa Logger</string>
+    <string name="accessibility_service_description">Zeichnet Bedienungshilfen-Ereignisse für späteres Abspielen auf.</string>
+</resources>

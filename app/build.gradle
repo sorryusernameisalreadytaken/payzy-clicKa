@@ -1,0 +1,58 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    // The namespace defines the base package for this module. It does not need to
+    // be identical to the applicationId, but aligning them simplifies package
+    // organization. Here we use the same namespace as the applicationId for
+    // clarity.
+    namespace 'eu.payzy.clicka'
+    compileSdk 34
+
+    defaultConfig {
+        // Assign the unique identifier of this application. This is the package
+        // name used on the device and in the Play Store. Changing this will
+        // produce a completely separate app installation.
+        applicationId "eu.payzy.clicka"
+        minSdk 21
+        targetSdk 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            // nix nötig
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+/**
+ * Fix für "Duplicate class kotlin.*":
+ * Irgendeine Dependency zieht kotlin-stdlib 1.8.22 und irgendwo hängt noch 1.6.21 dran.
+ * Wir zwingen alle kotlin-stdlib* Artefakte auf 1.8.22.
+ */
+configurations.configureEach {
+    resolutionStrategy.eachDependency { details ->
+        if (details.requested.group == "org.jetbrains.kotlin"
+                && details.requested.name != null
+                && details.requested.name.startsWith("kotlin-stdlib")) {
+            details.useVersion "1.8.22"
+        }
+    }
+}
+
+dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'androidx.core:core:1.13.1'
+}

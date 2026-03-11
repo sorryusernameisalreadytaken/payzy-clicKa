@@ -1,0 +1,4 @@
+// Define the name of the root project. This is used by Gradle to name the output folder
+// and does not necessarily need to match the applicationId of the Android app.
+rootProject.name = "PayzyClicka"
+include ':app'

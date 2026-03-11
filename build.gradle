@@ -1,0 +1,26 @@
+// Top-level build file for the Payzy clicKa project.
+// It defines repositories and the Android Gradle Plugin version.
+
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // Use a recent version of the Android Gradle Plugin. This version targets
+        // Android Gradle Plugin 8.2 which is compatible with compileSdkVersion 34.
+        classpath 'com.android.tools.build:gradle:8.2.1'
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+// Clean task to remove build outputs.
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}
