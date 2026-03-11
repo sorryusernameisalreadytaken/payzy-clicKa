@@ -1,33 +1,33 @@
 name: Bootstrap Gradle Wrapper
 
-# This workflow ensures that the Gradle wrapper scripts are present in the
-# repository. It is triggered on the first push and can be reused to
-# regenerate the wrapper if needed. This workflow runs once and exits
-# gracefully if the wrapper already exists.
-
 on:
-  push:
-    branches:
-      - '**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
-  bootstrap:
+  wrapper:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - name: Set up Java
-        uses: actions/setup-java@v3
+      - name: Setup JDK
+        uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          distribution: temurin
+          java-version: "17"
 
-      - name: Generate Gradle wrapper if missing
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Generate Gradle Wrapper
+        run: gradle wrapper
+
+      - name: Commit Gradle Wrapper
         run: |
-          if [ ! -f ./gradlew ]; then
-            echo "Gradle wrapper missing; generating it"
-            gradle wrapper --gradle-version 8.5
-          else
-            echo "Gradle wrapper already present"
-          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add gradlew gradlew.bat gradle/wrapper
+          git commit -m "Add Gradle wrapper" || echo "Nothing to commit"
+          git push
