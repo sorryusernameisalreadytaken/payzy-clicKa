@@ -46,6 +46,7 @@ public class MainActivity extends AppCompatActivity {
         android.widget.EditText editUsername = findViewById(R.id.edit_username);
         android.widget.EditText editPassword = findViewById(R.id.edit_password);
         android.widget.EditText editPin = findViewById(R.id.edit_pin);
+        android.widget.EditText editAllowedPackages = findViewById(R.id.edit_allowed_packages);
         Button saveButton = findViewById(R.id.button_save_credentials);
         // Watcher buttons and labels
         Button loginWatcherButton = findViewById(R.id.button_login_watcher);
@@ -64,6 +65,13 @@ public class MainActivity extends AppCompatActivity {
         }
         editPassword.setText(PrefsHelper.getPassword(this));
         editPin.setText(PrefsHelper.getPin(this));
+        String savedAllowed = PrefsHelper.getAllowedPackages(this);
+        // If nothing saved yet, use gr.payzy as sensible default
+        if (savedAllowed == null || savedAllowed.isEmpty()) {
+            editAllowedPackages.setText("gr.payzy");
+        } else {
+            editAllowedPackages.setText(savedAllowed);
+        }
         // Display stored wallet and coins values
         String walletValue = PrefsHelper.getWalletValue(this);
         String coinsValue = PrefsHelper.getCoinsValue(this);
@@ -134,9 +142,11 @@ public class MainActivity extends AppCompatActivity {
                 String username = editUsername.getText().toString();
                 String password = editPassword.getText().toString();
                 String pin = editPin.getText().toString();
+                String allowed = editAllowedPackages.getText().toString();
                 PrefsHelper.setUsername(MainActivity.this, username);
                 PrefsHelper.setPassword(MainActivity.this, password);
                 PrefsHelper.setPin(MainActivity.this, pin);
+                PrefsHelper.setAllowedPackages(MainActivity.this, allowed);
                 android.widget.Toast.makeText(MainActivity.this, R.string.saved_successfully, android.widget.Toast.LENGTH_SHORT).show();
             }
         });
@@ -285,5 +295,88 @@ public class MainActivity extends AppCompatActivity {
         if (currentInstance != null) {
             currentInstance.updateCoins(value);
         }
+    }
+
+    /**
+     * Static helper used by the accessibility service to update the label of the
+     * login watcher toggle button. When {@code active} is true the button will
+     * display the stop text, otherwise it will display the start text. If the
+     * activity is not currently visible the call is ignored.
+     *
+     * @param active whether the login watcher is active
+     */
+    public static void updateLoginWatcherButtonStatic(final boolean active) {
+        if (currentInstance != null) {
+            currentInstance.updateLoginWatcherButton(active);
+        }
+    }
+
+    /**
+     * Static helper used by the accessibility service to update the label of the
+     * wallet watcher toggle button.
+     *
+     * @param active whether the wallet watcher is active
+     */
+    public static void updateWalletWatcherButtonStatic(final boolean active) {
+        if (currentInstance != null) {
+            currentInstance.updateWalletWatcherButton(active);
+        }
+    }
+
+    /**
+     * Static helper used by the accessibility service to update the label of the
+     * coins watcher toggle button.
+     *
+     * @param active whether the coins watcher is active
+     */
+    public static void updateCoinsWatcherButtonStatic(final boolean active) {
+        if (currentInstance != null) {
+            currentInstance.updateCoinsWatcherButton(active);
+        }
+    }
+
+    /**
+     * Updates the login watcher button label on the UI thread.
+     *
+     * @param active true if the watcher is active (show stop), false otherwise
+     */
+    private void updateLoginWatcherButton(final boolean active) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                android.widget.Button btn = findViewById(R.id.button_login_watcher);
+                btn.setText(active ? getString(R.string.button_login_watcher_stop) : getString(R.string.button_login_watcher_start));
+            }
+        });
+    }
+
+    /**
+     * Updates the wallet watcher button label on the UI thread.
+     *
+     * @param active true if the watcher is active (show stop), false otherwise
+     */
+    private void updateWalletWatcherButton(final boolean active) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                android.widget.Button btn = findViewById(R.id.button_wallet_watcher);
+                btn.setText(active ? getString(R.string.button_wallet_watcher_stop) : getString(R.string.button_wallet_watcher_start));
+            }
+        });
+    }
+
+    /**
+     * Updates the coins watcher button label on the UI thread.
+     *
+     * @param active true if the watcher is active (show stop), false otherwise
+     */
+    private void updateCoinsWatcherButton(final boolean active) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                android.widget.Button btn = findViewById(R.id.button_coins_watcher);
+                btn.setText(active ? getString(R.string.button_coins_watcher_stop) : getString(R.string.button_coins_watcher_start));
+            }
+        });
     }
 }

@@ -46,4 +46,5 @@
     <string name="button_coins_watcher_stop">Coins-Watcher stoppen</string>
     <string name="label_wallet">Guthaben</string>
     <string name="label_coins">Coins</string>
+    <string name="hint_allowed_packages">App-IDs (durch Komma getrennt)</string>
 </resources>

@@ -21,6 +21,9 @@ public final class PrefsHelper {
     private static final String KEY_WALLET_VALUE = "wallet_value";
     private static final String KEY_COINS_VALUE = "coins_value";
 
+    // Key for storing the comma-separated list of allowed package names used by watchers
+    private static final String KEY_ALLOWED_PACKAGES = "allowed_packages";
+
     private PrefsHelper() {
         // Prevent instantiation
     }
@@ -160,5 +163,47 @@ public final class PrefsHelper {
     public static String getCoinsValue(Context context) {
         SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
         return prefs.getString(KEY_COINS_VALUE, "");
+    }
+
+    /**
+     * Stores a comma-separated list of allowed package names. Watchers will only
+     * interact with screens whose root package matches one of these values. An
+     * empty string disables package filtering.
+     *
+     * @param context a valid context
+     * @param packagesCsv a comma-separated list of package names
+     */
+    public static void setAllowedPackages(Context context, String packagesCsv) {
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        prefs.edit().putString(KEY_ALLOWED_PACKAGES, packagesCsv != null ? packagesCsv : "").apply();
+    }
+
+    /**
+     * Retrieves the stored comma-separated list of allowed package names.
+     *
+     * @param context a valid context
+     * @return the stored list or an empty string if not set
+     */
+    public static String getAllowedPackages(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        return prefs.getString(KEY_ALLOWED_PACKAGES, "");
+    }
+
+    /**
+     * Parses the stored comma-separated package list into an array of trimmed strings.
+     *
+     * @param context a valid context
+     * @return an array of allowed package names; if none are specified, returns an empty array
+     */
+    public static String[] getAllowedPackagesList(Context context) {
+        String csv = getAllowedPackages(context);
+        if (csv == null || csv.trim().isEmpty()) {
+            return new String[0];
+        }
+        String[] parts = csv.split(",");
+        for (int i = 0; i < parts.length; i++) {
+            parts[i] = parts[i].trim();
+        }
+        return parts;
     }
 }

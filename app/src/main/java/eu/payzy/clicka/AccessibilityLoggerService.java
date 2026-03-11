@@ -94,6 +94,37 @@ public class AccessibilityLoggerService extends AccessibilityService {
      */
     private volatile int coinsWatcherId = 0;
 
+    /**
+     * Determines whether the given package name is allowed for automated interactions.
+     * The list of allowed packages is configured by the user via the main UI. If the
+     * list is empty, all packages except this app's own package are allowed. When the
+     * root window's package is not in the allowed list, watchers will silently skip
+     * any actions for that window.
+     *
+     * @param packageName the package name of the active window
+     * @return true if interactions should be permitted
+     */
+    private boolean isPackageAllowed(String packageName) {
+        if (packageName == null) {
+            return false;
+        }
+        String[] allowed = PrefsHelper.getAllowedPackagesList(this);
+        // Do not interact with our own app
+        if (packageName.equals(getPackageName())) {
+            return false;
+        }
+        // If no packages specified, allow all others
+        if (allowed == null || allowed.length == 0) {
+            return true;
+        }
+        for (String p : allowed) {
+            if (p != null && !p.isEmpty() && p.equalsIgnoreCase(packageName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Override
     public void onServiceConnected() {
         super.onServiceConnected();
@@ -718,6 +749,8 @@ public class AccessibilityLoggerService extends AccessibilityService {
             if (success) {
                 // Stop the watcher after a successful login to prevent repeated logins
                 toggleLoginWatcher(username, password);
+                // Inform main activity to update button state to "start"
+                MainActivity.updateLoginWatcherButtonStatic(false);
                 showToast("Login-Watcher: Login durchgeführt");
                 break;
             }
@@ -727,6 +760,8 @@ public class AccessibilityLoggerService extends AccessibilityService {
                 break;
             }
         }
+        // Ensure the button reflects the stopped state when the loop exits
+        MainActivity.updateLoginWatcherButtonStatic(false);
     }
 
     /**
@@ -740,6 +775,21 @@ public class AccessibilityLoggerService extends AccessibilityService {
      * @return true if a login attempt was executed (i.e., the login button was clicked)
      */
     private boolean attemptLoginWatcher(String username, String password, int watcherId) {
+        // Determine the package of the active window. Skip if not allowed.
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) {
+            return false;
+        }
+        try {
+            CharSequence pkgCs = root.getPackageName();
+            String pkg = pkgCs != null ? pkgCs.toString() : "";
+            if (!isPackageAllowed(pkg)) {
+                // Do nothing if current app is not allowed
+                return false;
+            }
+        } finally {
+            root.recycle();
+        }
         // We ignore watcherId here because runLoginWatcherLoop handles cancellation
         // First try strategy2
         boolean success = attemptStrategy2(username, password, -1);
@@ -761,34 +811,11 @@ public class AccessibilityLoggerService extends AccessibilityService {
             AccessibilityNodeInfo root = getRootInActiveWindow();
             if (root != null) {
                 try {
-                    java.util.List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByText("Guthaben");
-                    boolean found = false;
-                    if (nodes != null) {
-                        for (AccessibilityNodeInfo node : nodes) {
-                            try {
-                                CharSequence text = node.getText();
-                                if (text != null && text.toString().toLowerCase().contains("guthaben")) {
-                                    String full = text.toString();
-                                    // Extract numeric value (up to the first space or before the word Guthaben)
-                                    String value = extractNumericValue(full);
-                                    // Persist and update UI
-                                    PrefsHelper.setWalletValue(this, value);
-                                    MainActivity.updateWalletValueStatic(value);
-                                    showToast("Wallet gefunden: " + value);
-                                    // Click the card
-                                    node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-                                    found = true;
-                                    break;
-                                }
-                            } finally {
-                                node.recycle();
-                            }
-                        }
-                    }
-                    // Optionally search by euro symbol if not found
-                    if (!found) {
-                        // fallback search: find nodes containing € and guthaben in content description or text
-                        // A simple breadth-first search for text containing € and guthaben
+                    CharSequence pkgCs = root.getPackageName();
+                    String pkg = pkgCs != null ? pkgCs.toString() : "";
+                    if (isPackageAllowed(pkg)) {
+                        boolean found = false;
+                        // Breadth‑first search for nodes containing a balance indicator
                         java.util.LinkedList<AccessibilityNodeInfo> queue = new java.util.LinkedList<>();
                         queue.add(AccessibilityNodeInfo.obtain(root));
                         while (!queue.isEmpty() && !found) {
@@ -798,17 +825,29 @@ public class AccessibilityLoggerService extends AccessibilityService {
                                 CharSequence cd = n.getContentDescription();
                                 String ts = t != null ? t.toString() : "";
                                 String cs = cd != null ? cd.toString() : "";
-                                if ((ts.contains("€") && ts.toLowerCase().contains("guthaben")) ||
-                                    (cs.contains("€") && cs.toLowerCase().contains("guthaben"))) {
+                                String lower = (ts + " " + cs).toLowerCase();
+                                if (lower.contains("guthaben") || ts.contains("€") || cs.contains("€")) {
+                                    // Attempt to extract a numeric value from either text or content description
                                     String full = !ts.isEmpty() ? ts : cs;
                                     String value = extractNumericValue(full);
-                                    PrefsHelper.setWalletValue(this, value);
-                                    MainActivity.updateWalletValueStatic(value);
-                                    showToast("Wallet gefunden: " + value);
-                                    n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-                                    found = true;
-                                    break;
+                                    if (value == null || value.isEmpty()) {
+                                        // As a fallback, search the other string
+                                        String alt = ts.isEmpty() ? cs : ts;
+                                        value = extractNumericValue(alt);
+                                    }
+                                    if (value != null && !value.isEmpty()) {
+                                        PrefsHelper.setWalletValue(this, value);
+                                        MainActivity.updateWalletValueStatic(value);
+                                        showToast("Guthaben erkannt: " + value);
+                                        // click the element if clickable to follow navigation
+                                        if (n.isClickable()) {
+                                            n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                                        }
+                                        found = true;
+                                        break;
+                                    }
                                 }
+                                // continue BFS
                                 for (int i = 0; i < n.getChildCount(); i++) {
                                     AccessibilityNodeInfo child = n.getChild(i);
                                     if (child != null) {
@@ -832,6 +871,8 @@ public class AccessibilityLoggerService extends AccessibilityService {
                 break;
             }
         }
+        // When loop exits, update button label on the main UI
+        MainActivity.updateWalletWatcherButtonStatic(false);
     }
 
     /**
@@ -846,29 +887,10 @@ public class AccessibilityLoggerService extends AccessibilityService {
             AccessibilityNodeInfo root = getRootInActiveWindow();
             if (root != null) {
                 try {
-                    java.util.List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByText("Coins");
-                    boolean found = false;
-                    if (nodes != null) {
-                        for (AccessibilityNodeInfo node : nodes) {
-                            try {
-                                CharSequence text = node.getText();
-                                if (text != null && text.toString().toLowerCase().contains("coins")) {
-                                    String full = text.toString();
-                                    String value = extractNumericValue(full);
-                                    PrefsHelper.setCoinsValue(this, value);
-                                    MainActivity.updateCoinsValueStatic(value);
-                                    showToast("Coins gefunden: " + value);
-                                    node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-                                    found = true;
-                                    break;
-                                }
-                            } finally {
-                                node.recycle();
-                            }
-                        }
-                    }
-                    if (!found) {
-                        // fallback search by scanning all nodes for text containing "Coins"
+                    CharSequence pkgCs = root.getPackageName();
+                    String pkg = pkgCs != null ? pkgCs.toString() : "";
+                    if (isPackageAllowed(pkg)) {
+                        boolean found = false;
                         java.util.LinkedList<AccessibilityNodeInfo> queue = new java.util.LinkedList<>();
                         queue.add(AccessibilityNodeInfo.obtain(root));
                         while (!queue.isEmpty() && !found) {
@@ -878,15 +900,25 @@ public class AccessibilityLoggerService extends AccessibilityService {
                                 CharSequence cd = n.getContentDescription();
                                 String ts = t != null ? t.toString() : "";
                                 String cs = cd != null ? cd.toString() : "";
-                                if ((ts.toLowerCase().contains("coins")) || (cs.toLowerCase().contains("coins"))) {
+                                String lower = (ts + " " + cs).toLowerCase();
+                                if (lower.contains("coins")) {
+                                    // Extract numeric portion
                                     String full = !ts.isEmpty() ? ts : cs;
                                     String value = extractNumericValue(full);
-                                    PrefsHelper.setCoinsValue(this, value);
-                                    MainActivity.updateCoinsValueStatic(value);
-                                    showToast("Coins gefunden: " + value);
-                                    n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-                                    found = true;
-                                    break;
+                                    if (value == null || value.isEmpty()) {
+                                        String alt = ts.isEmpty() ? cs : ts;
+                                        value = extractNumericValue(alt);
+                                    }
+                                    if (value != null && !value.isEmpty()) {
+                                        PrefsHelper.setCoinsValue(this, value);
+                                        MainActivity.updateCoinsValueStatic(value);
+                                        showToast("Coins erkannt: " + value);
+                                        if (n.isClickable()) {
+                                            n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                                        }
+                                        found = true;
+                                        break;
+                                    }
                                 }
                                 for (int i = 0; i < n.getChildCount(); i++) {
                                     AccessibilityNodeInfo child = n.getChild(i);
@@ -911,6 +943,7 @@ public class AccessibilityLoggerService extends AccessibilityService {
                 break;
             }
         }
+        MainActivity.updateCoinsWatcherButtonStatic(false);
     }
 
     /**
