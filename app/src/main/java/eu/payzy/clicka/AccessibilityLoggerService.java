@@ -95,6 +95,13 @@ public class AccessibilityLoggerService extends AccessibilityService {
     private volatile int coinsWatcherId = 0;
 
     /**
+     * Records the timestamp of the last successful login performed by the login watcher.
+     * This is used to avoid repeated login attempts in quick succession. A value of
+     * zero indicates no login has been performed yet.
+     */
+    private long lastLoginWatcherTimestamp = 0L;
+
+    /**
      * Determines whether the given package name is allowed for automated interactions.
      * The list of allowed packages is configured by the user via the main UI. If the
      * list is empty, all packages except this app's own package are allowed. When the
@@ -745,14 +752,21 @@ public class AccessibilityLoggerService extends AccessibilityService {
      */
     private void runLoginWatcherLoop(String username, String password, int watcherId) {
         while (loginWatcherActive && watcherId == loginWatcherId) {
+            // If we recently performed a login, wait a few seconds before attempting again
+            long now = System.currentTimeMillis();
+            if (lastLoginWatcherTimestamp > 0 && (now - lastLoginWatcherTimestamp) < 5000) {
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    break;
+                }
+                continue;
+            }
             boolean success = attemptLoginWatcher(username, password, watcherId);
             if (success) {
-                // Stop the watcher after a successful login to prevent repeated logins
-                toggleLoginWatcher(username, password);
-                // Inform main activity to update button state to "start"
-                MainActivity.updateLoginWatcherButtonStatic(false);
+                lastLoginWatcherTimestamp = System.currentTimeMillis();
                 showToast("Login-Watcher: Login durchgeführt");
-                break;
+                // Do not stop the watcher; continue scanning for future logins
             }
             try {
                 Thread.sleep(1000);
@@ -760,7 +774,7 @@ public class AccessibilityLoggerService extends AccessibilityService {
                 break;
             }
         }
-        // Ensure the button reflects the stopped state when the loop exits
+        // When the loop exits because the watcher was toggled off or superseded, update the UI
         MainActivity.updateLoginWatcherButtonStatic(false);
     }
 
