@@ -8,6 +8,9 @@ import android.os.Environment;
 import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
+import android.os.Handler;
+import android.os.Looper;
+import android.widget.Toast;
 
 import org.json.JSONObject;
 
@@ -46,6 +49,13 @@ public class AccessibilityLoggerService extends AccessibilityService {
      * {@link #onServiceConnected()} and cleared in {@link #onDestroy()}.
      */
     private static AccessibilityLoggerService instance;
+
+    /**
+     * Tracks the current login attempt. Each call to {@link #performLoginApproach} increments
+     * this ID. Background scanning loops check this value to determine whether they
+     * should continue running or be cancelled in favour of a newer login attempt.
+     */
+    private int currentLoginAttemptId = 0;
 
     @Override
     public void onServiceConnected() {
@@ -86,6 +96,22 @@ public class AccessibilityLoggerService extends AccessibilityService {
      */
     public static AccessibilityLoggerService getInstance() {
         return instance;
+    }
+
+    /**
+     * Displays a short toast message on the main UI thread. The service runs on
+     * its own thread, so toasts must be posted to the main looper.
+     *
+     * @param message the message to display
+     */
+    private void showToast(final String message) {
+        Handler handler = new Handler(Looper.getMainLooper());
+        handler.post(new Runnable() {
+            @Override
+            public void run() {
+                Toast.makeText(AccessibilityLoggerService.this, message, Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     /**
@@ -138,26 +164,17 @@ public class AccessibilityLoggerService extends AccessibilityService {
      * @param username the user name (used by some strategies)
      * @param password the password to enter into the password field
      */
-    public void performLoginApproach(int approach, String username, String password) {
-        switch (approach) {
-            case 1:
-                loginStrategy1(username, password);
-                break;
-            case 2:
-                loginStrategy2(username, password);
-                break;
-            case 3:
-                loginStrategy3(username, password);
-                break;
-            case 4:
-                loginStrategy4(username, password);
-                break;
-            case 5:
-                loginStrategy5(username, password);
-                break;
-            default:
-                Log.w(TAG, "Unknown login approach: " + approach);
-        }
+    public void performLoginApproach(final int approach, final String username, final String password) {
+        // Increment the login attempt ID to cancel any previous background loops
+        final int attemptId = ++currentLoginAttemptId;
+        showToast("Login Ansatz " + approach + " gestartet");
+        // Launch scanning loop in a background thread so as not to block the service
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                runLoginLoop(approach, username, password, attemptId);
+            }
+        }).start();
     }
 
     /**
@@ -466,6 +483,569 @@ public class AccessibilityLoggerService extends AccessibilityService {
         builder.addStroke(stroke);
         android.accessibilityservice.GestureDescription gesture = builder.build();
         dispatchGesture(gesture, null, null);
+    }
+
+    /**
+     * Runs a login loop for the specified approach. The loop attempts up to a fixed
+     * number of times (e.g. 10) to locate the necessary UI elements and perform the
+     * login actions. Between attempts it sleeps briefly. If the {@code attemptId}
+     * no longer matches {@link #currentLoginAttemptId}, the loop will abort early.
+     *
+     * @param approach the login strategy number (1-10)
+     * @param username the user name
+     * @param password the password
+     * @param attemptId the unique ID for this login attempt
+     */
+    private void runLoginLoop(int approach, String username, String password, int attemptId) {
+        final int MAX_TRIES = 10;
+        for (int i = 0; i < MAX_TRIES; i++) {
+            // Abort if a newer login attempt has started
+            if (attemptId != currentLoginAttemptId) {
+                return;
+            }
+            boolean success = runStrategyOnce(approach, username, password, attemptId);
+            if (success) {
+                showToast("Ansatz " + approach + ": Login erfolgreich");
+                return;
+            } else {
+                showToast("Ansatz " + approach + ": Versuch " + (i + 1) + " fehlgeschlagen");
+            }
+            // Wait before trying again
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                return;
+            }
+        }
+        // Inform user that the attempts finished without success
+        if (attemptId == currentLoginAttemptId) {
+            showToast("Ansatz " + approach + ": keine passenden Elemente gefunden");
+        }
+    }
+
+    /**
+     * Executes a single attempt of the specified strategy. Returns {@code true} if the
+     * password field was filled and the login button was clicked successfully. This
+     * method checks the {@code attemptId} before and after significant operations to
+     * cancel early if a newer login attempt has superseded this one.
+     *
+     * @param approach the strategy number
+     * @param username the user name
+     * @param password the password
+     * @param attemptId the current attempt ID
+     * @return true if the attempt completed and clicked the login button
+     */
+    private boolean runStrategyOnce(int approach, String username, String password, int attemptId) {
+        // Abort if cancelled
+        if (attemptId != currentLoginAttemptId) return false;
+        boolean success = false;
+        switch (approach) {
+            case 1:
+                success = attemptStrategy1(username, password, attemptId);
+                break;
+            case 2:
+                success = attemptStrategy2(username, password, attemptId);
+                break;
+            case 3:
+                success = attemptStrategy3(username, password, attemptId);
+                break;
+            case 4:
+                success = attemptStrategy4(username, password, attemptId);
+                break;
+            case 5:
+                success = attemptStrategy5(username, password, attemptId);
+                break;
+            case 6:
+                success = attemptStrategy6(username, password, attemptId);
+                break;
+            case 7:
+                success = attemptStrategy7(username, password, attemptId);
+                break;
+            case 8:
+                success = attemptStrategy8(username, password, attemptId);
+                break;
+            case 9:
+                success = attemptStrategy9(username, password, attemptId);
+                break;
+            case 10:
+                success = attemptStrategy10(username, password, attemptId);
+                break;
+            default:
+                showToast("Unbekannter Login-Ansatz: " + approach);
+                return false;
+        }
+        return success;
+    }
+
+    /*
+     * The following attemptStrategyX methods implement single attempts for each login
+     * strategy. They return true if the login button was clicked. Toast messages
+     * provide feedback on what elements were found or missing.
+     */
+
+    private boolean attemptStrategy1(String username, String password, int attemptId) {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) {
+            return false;
+        }
+        boolean success = false;
+        try {
+            String welcomeText = "Willkommen," + username;
+            java.util.List<AccessibilityNodeInfo> welcomeNodes = root.findAccessibilityNodeInfosByText(welcomeText);
+            boolean welcomeDetected = welcomeNodes != null && !welcomeNodes.isEmpty();
+            showToast("Ansatz 1: Willkommen gefunden=" + welcomeDetected);
+            if (!welcomeDetected) {
+                return false;
+            }
+            // Password field
+            java.util.List<AccessibilityNodeInfo> passwords = new java.util.ArrayList<>();
+            collectPasswordFields(root, passwords);
+            boolean pwdFound = !passwords.isEmpty();
+            showToast("Ansatz 1: Passwortfeld gefunden=" + pwdFound);
+            if (pwdFound) {
+                AccessibilityNodeInfo pwdNode = passwords.get(0);
+                android.os.Bundle args = new android.os.Bundle();
+                args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, password);
+                pwdNode.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
+                pwdNode.recycle();
+            }
+            // Login button
+            java.util.List<AccessibilityNodeInfo> loginNodes = root.findAccessibilityNodeInfosByText("Anmelden");
+            boolean loginClicked = false;
+            if (loginNodes != null) {
+                for (AccessibilityNodeInfo btn : loginNodes) {
+                    try {
+                        if (btn.isClickable()) {
+                            btn.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                            loginClicked = true;
+                            break;
+                        }
+                    } finally {
+                        btn.recycle();
+                    }
+                }
+            }
+            showToast("Ansatz 1: Login-Knopf geklickt=" + loginClicked);
+            success = loginClicked;
+        } catch (Exception e) {
+            Log.e(TAG, "AttemptStrategy1 error", e);
+        } finally {
+            root.recycle();
+        }
+        return success;
+    }
+
+    private boolean attemptStrategy2(String username, String password, int attemptId) {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) {
+            return false;
+        }
+        boolean success = false;
+        try {
+            // Password field
+            java.util.List<AccessibilityNodeInfo> passwords = new java.util.ArrayList<>();
+            collectPasswordFields(root, passwords);
+            boolean pwdFound = !passwords.isEmpty();
+            showToast("Ansatz 2: Passwortfeld gefunden=" + pwdFound);
+            if (pwdFound) {
+                AccessibilityNodeInfo pwdNode = passwords.get(0);
+                android.os.Bundle args = new android.os.Bundle();
+                args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, password);
+                pwdNode.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
+                pwdNode.recycle();
+            }
+            // Login button by exact text
+            java.util.List<AccessibilityNodeInfo> loginNodes = root.findAccessibilityNodeInfosByText("Anmelden");
+            boolean loginClicked = false;
+            if (loginNodes != null) {
+                for (AccessibilityNodeInfo btn : loginNodes) {
+                    try {
+                        if (btn.isClickable()) {
+                            btn.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                            loginClicked = true;
+                            break;
+                        }
+                    } finally {
+                        btn.recycle();
+                    }
+                }
+            }
+            showToast("Ansatz 2: Login-Knopf geklickt=" + loginClicked);
+            success = loginClicked;
+        } catch (Exception e) {
+            Log.e(TAG, "AttemptStrategy2 error", e);
+        } finally {
+            root.recycle();
+        }
+        return success;
+    }
+
+    private boolean attemptStrategy3(String username, String password, int attemptId) {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return false;
+        boolean success = false;
+        try {
+            android.graphics.Rect passwordBounds = new android.graphics.Rect(84, 811, 996, 952);
+            android.graphics.Rect loginBounds = new android.graphics.Rect(172, 1981, 909, 2130);
+            AccessibilityNodeInfo pwdNode = findNodeByBounds(root, passwordBounds, 20);
+            boolean pwdFound = pwdNode != null;
+            showToast("Ansatz 3: Passwort-Feld per Bounds gefunden=" + pwdFound);
+            if (pwdFound) {
+                android.os.Bundle args = new android.os.Bundle();
+                args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, password);
+                pwdNode.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
+                pwdNode.recycle();
+            }
+            AccessibilityNodeInfo loginNode = findNodeByBounds(root, loginBounds, 20);
+            boolean loginClicked = false;
+            if (loginNode != null) {
+                loginNode.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                loginNode.recycle();
+                loginClicked = true;
+            }
+            showToast("Ansatz 3: Login-Knopf per Bounds geklickt=" + loginClicked);
+            success = loginClicked;
+        } catch (Exception e) {
+            Log.e(TAG, "AttemptStrategy3 error", e);
+        } finally {
+            root.recycle();
+        }
+        return success;
+    }
+
+    private boolean attemptStrategy4(String username, String password, int attemptId) {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return false;
+        boolean success = false;
+        try {
+            AccessibilityNodeInfo firstEdit = findFirstEditText(root);
+            boolean editFound = firstEdit != null;
+            showToast("Ansatz 4: Erstes EditText gefunden=" + editFound);
+            if (editFound) {
+                android.os.Bundle args = new android.os.Bundle();
+                args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, password);
+                firstEdit.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
+                firstEdit.recycle();
+            }
+            // Partial text "Anmeld"
+            boolean loginClicked = clickLoginButtonByPartialTextAndReturn(root, "Anmeld");
+            showToast("Ansatz 4: Login-Knopf (Partial) geklickt=" + loginClicked);
+            success = loginClicked;
+        } catch (Exception e) {
+            Log.e(TAG, "AttemptStrategy4 error", e);
+        } finally {
+            root.recycle();
+        }
+        return success;
+    }
+
+    private boolean attemptStrategy5(String username, String password, int attemptId) {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return false;
+        boolean success = false;
+        try {
+            // Fill password
+            java.util.List<AccessibilityNodeInfo> passwords = new java.util.ArrayList<>();
+            collectPasswordFields(root, passwords);
+            boolean pwdFound = !passwords.isEmpty();
+            showToast("Ansatz 5: Passwortfeld gefunden=" + pwdFound);
+            if (pwdFound) {
+                AccessibilityNodeInfo pwdNode = passwords.get(0);
+                android.os.Bundle args = new android.os.Bundle();
+                args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, password);
+                pwdNode.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
+                pwdNode.recycle();
+            }
+            // clickable nodes with 'anmelden'
+            java.util.List<AccessibilityNodeInfo> candidates = new java.util.ArrayList<>();
+            collectClickableNodes(root, candidates);
+            boolean clicked = false;
+            for (AccessibilityNodeInfo node : candidates) {
+                try {
+                    CharSequence t = node.getText();
+                    CharSequence cd = node.getContentDescription();
+                    String textStr = t != null ? t.toString().toLowerCase() : "";
+                    String cdStr = cd != null ? cd.toString().toLowerCase() : "";
+                    if (textStr.contains("anmelden") || cdStr.contains("anmelden")) {
+                        node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                        clicked = true;
+                        break;
+                    }
+                } finally {
+                    node.recycle();
+                }
+            }
+            if (!clicked) {
+                // fallback: click centre of bounds
+                android.graphics.Rect loginBounds = new android.graphics.Rect(172, 1981, 909, 2130);
+                float cx = (loginBounds.left + loginBounds.right) / 2f;
+                float cy = (loginBounds.top + loginBounds.bottom) / 2f;
+                performClickAt(cx, cy);
+                clicked = true;
+            }
+            showToast("Ansatz 5: Login-Knopf geklickt=" + clicked);
+            success = clicked;
+        } catch (Exception e) {
+            Log.e(TAG, "AttemptStrategy5 error", e);
+        } finally {
+            root.recycle();
+        }
+        return success;
+    }
+
+    private boolean attemptStrategy6(String username, String password, int attemptId) {
+        // Similar to strategy1 but search for "Willkommen" without username
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return false;
+        boolean success = false;
+        try {
+            java.util.List<AccessibilityNodeInfo> welcomeNodes = root.findAccessibilityNodeInfosByText("Willkommen");
+            boolean welcomeDetected = welcomeNodes != null && !welcomeNodes.isEmpty();
+            showToast("Ansatz 6: Irgendein Willkommen gefunden=" + welcomeDetected);
+            // proceed even if welcome not found; we attempt fill & click
+            // fill first password field or first edittext
+            java.util.List<AccessibilityNodeInfo> passwords = new java.util.ArrayList<>();
+            collectPasswordFields(root, passwords);
+            boolean pwdFound = !passwords.isEmpty();
+            showToast("Ansatz 6: Passwortfeld gefunden=" + pwdFound);
+            if (pwdFound) {
+                AccessibilityNodeInfo pwdNode = passwords.get(0);
+                android.os.Bundle args = new android.os.Bundle();
+                args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, password);
+                pwdNode.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
+                pwdNode.recycle();
+            }
+            // click login button
+            boolean clicked = clickLoginButtonByPartialTextAndReturn(root, "Anmelden");
+            showToast("Ansatz 6: Login-Knopf geklickt=" + clicked);
+            success = clicked;
+        } catch (Exception e) {
+            Log.e(TAG, "AttemptStrategy6 error", e);
+        } finally {
+            root.recycle();
+        }
+        return success;
+    }
+
+    private boolean attemptStrategy7(String username, String password, int attemptId) {
+        // Variation: search for welcome in content description rather than text
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return false;
+        boolean success = false;
+        try {
+            boolean welcomeFound = false;
+            java.util.List<AccessibilityNodeInfo> allNodes = new java.util.ArrayList<>();
+            collectClickableNodes(root, allNodes);
+            for (AccessibilityNodeInfo node : allNodes) {
+                try {
+                    CharSequence cd = node.getContentDescription();
+                    if (cd != null && cd.toString().contains("Willkommen")) {
+                        welcomeFound = true;
+                        break;
+                    }
+                } finally {
+                    node.recycle();
+                }
+            }
+            showToast("Ansatz 7: Willkommen in ContentDesc gefunden=" + welcomeFound);
+            // fill password
+            java.util.List<AccessibilityNodeInfo> passwords = new java.util.ArrayList<>();
+            collectPasswordFields(root, passwords);
+            boolean pwdFound = !passwords.isEmpty();
+            showToast("Ansatz 7: Passwortfeld gefunden=" + pwdFound);
+            if (pwdFound) {
+                AccessibilityNodeInfo pwdNode = passwords.get(0);
+                android.os.Bundle args = new android.os.Bundle();
+                args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, password);
+                pwdNode.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
+                pwdNode.recycle();
+            }
+            // find any clickable with text containing "login" or "anmelden"
+            boolean clicked = false;
+            allNodes.clear();
+            collectClickableNodes(root, allNodes);
+            for (AccessibilityNodeInfo node : allNodes) {
+                try {
+                    String text = node.getText() != null ? node.getText().toString().toLowerCase() : "";
+                    String cd = node.getContentDescription() != null ? node.getContentDescription().toString().toLowerCase() : "";
+                    if (text.contains("login") || text.contains("anmelden") || cd.contains("login") || cd.contains("anmelden")) {
+                        node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                        clicked = true;
+                        break;
+                    }
+                } finally {
+                    node.recycle();
+                }
+            }
+            showToast("Ansatz 7: Login-Knopf geklickt=" + clicked);
+            success = clicked;
+        } catch (Exception e) {
+            Log.e(TAG, "AttemptStrategy7 error", e);
+        } finally {
+            root.recycle();
+        }
+        return success;
+    }
+
+    private boolean attemptStrategy8(String username, String password, int attemptId) {
+        // Variation: bounding boxes with larger tolerance
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return false;
+        boolean success = false;
+        try {
+            android.graphics.Rect passwordBounds = new android.graphics.Rect(84, 811, 996, 952);
+            android.graphics.Rect loginBounds = new android.graphics.Rect(172, 1981, 909, 2130);
+            AccessibilityNodeInfo pwdNode = findNodeByBounds(root, passwordBounds, 50);
+            boolean pwdFound = pwdNode != null;
+            showToast("Ansatz 8: Passwort-Feld (große Toleranz) gefunden=" + pwdFound);
+            if (pwdFound) {
+                android.os.Bundle args = new android.os.Bundle();
+                args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, password);
+                pwdNode.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
+                pwdNode.recycle();
+            }
+            AccessibilityNodeInfo loginNode = findNodeByBounds(root, loginBounds, 50);
+            boolean clicked = false;
+            if (loginNode != null) {
+                loginNode.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                loginNode.recycle();
+                clicked = true;
+            }
+            showToast("Ansatz 8: Login-Knopf (große Toleranz) geklickt=" + clicked);
+            success = clicked;
+        } catch (Exception e) {
+            Log.e(TAG, "AttemptStrategy8 error", e);
+        } finally {
+            root.recycle();
+        }
+        return success;
+    }
+
+    private boolean attemptStrategy9(String username, String password, int attemptId) {
+        // Variation: use first EditText if password not found, and click any clickable button at bottom half of screen
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return false;
+        boolean success = false;
+        try {
+            // fill password field if present, else first EditText
+            java.util.List<AccessibilityNodeInfo> passwords = new java.util.ArrayList<>();
+            collectPasswordFields(root, passwords);
+            AccessibilityNodeInfo targetField = null;
+            if (!passwords.isEmpty()) {
+                targetField = passwords.get(0);
+                showToast("Ansatz 9: Passwortfeld gefunden");
+            } else {
+                targetField = findFirstEditText(root);
+                showToast("Ansatz 9: Passwortfeld nicht gefunden, benutze erstes EditText=" + (targetField != null));
+            }
+            if (targetField != null) {
+                android.os.Bundle args = new android.os.Bundle();
+                args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, password);
+                targetField.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
+                targetField.recycle();
+            }
+            // click any clickable node at lower half (y > half of screen height) with text containing "anmeld"
+            java.util.List<AccessibilityNodeInfo> clickable = new java.util.ArrayList<>();
+            collectClickableNodes(root, clickable);
+            boolean clicked = false;
+            for (AccessibilityNodeInfo node : clickable) {
+                try {
+                    android.graphics.Rect rect = new android.graphics.Rect();
+                    node.getBoundsInScreen(rect);
+                    if (rect.top > 1000) { // assume 2340p height; adjust as needed
+                        String text = node.getText() != null ? node.getText().toString().toLowerCase() : "";
+                        String cd = node.getContentDescription() != null ? node.getContentDescription().toString().toLowerCase() : "";
+                        if (text.contains("anmeld") || cd.contains("anmeld")) {
+                            node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                            clicked = true;
+                            break;
+                        }
+                    }
+                } finally {
+                    node.recycle();
+                }
+            }
+            showToast("Ansatz 9: Login-Knopf geklickt=" + clicked);
+            success = clicked;
+        } catch (Exception e) {
+            Log.e(TAG, "AttemptStrategy9 error", e);
+        } finally {
+            root.recycle();
+        }
+        return success;
+    }
+
+    private boolean attemptStrategy10(String username, String password, int attemptId) {
+        // Variation: use gesture taps at predetermined coordinates without searching for nodes
+        // Coordinates derived from the log: tap password field, then login button
+        // We'll still attempt to set password via password field detection
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return false;
+        boolean success = false;
+        try {
+            // Tap password field centre first to focus
+            android.graphics.Rect pwdRect = new android.graphics.Rect(84, 811, 996, 952);
+            float px = (pwdRect.left + pwdRect.right) / 2f;
+            float py = (pwdRect.top + pwdRect.bottom) / 2f;
+            performClickAt(px, py);
+            showToast("Ansatz 10: Passwortfeld angetippt");
+            // Wait briefly for focus
+            try { Thread.sleep(300); } catch (InterruptedException ignored) {}
+            // Attempt to fill via password field detection
+            java.util.List<AccessibilityNodeInfo> passwords = new java.util.ArrayList<>();
+            collectPasswordFields(root, passwords);
+            if (!passwords.isEmpty()) {
+                AccessibilityNodeInfo pwdNode = passwords.get(0);
+                android.os.Bundle args = new android.os.Bundle();
+                args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, password);
+                pwdNode.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
+                pwdNode.recycle();
+                showToast("Ansatz 10: Passwort gesetzt");
+            } else {
+                showToast("Ansatz 10: Kein Passwortfeld gefunden, nur angetippt");
+            }
+            // Tap login button
+            android.graphics.Rect loginRect = new android.graphics.Rect(172, 1981, 909, 2130);
+            float cx = (loginRect.left + loginRect.right) / 2f;
+            float cy = (loginRect.top + loginRect.bottom) / 2f;
+            performClickAt(cx, cy);
+            showToast("Ansatz 10: Login-Knopf angetippt");
+            success = true;
+        } catch (Exception e) {
+            Log.e(TAG, "AttemptStrategy10 error", e);
+        } finally {
+            root.recycle();
+        }
+        return success;
+    }
+
+    /**
+     * Helper to click the first node whose text or content description contains the given
+     * substring (case-insensitive), returning whether a click occurred. This is an
+     * alternative to {@link #clickLoginButtonByPartialText} that returns a result.
+     */
+    private boolean clickLoginButtonByPartialTextAndReturn(AccessibilityNodeInfo root, String substring) {
+        if (substring == null || substring.isEmpty()) return false;
+        java.util.List<AccessibilityNodeInfo> allNodes = new java.util.ArrayList<>();
+        collectClickableNodes(root, allNodes);
+        String lower = substring.toLowerCase();
+        boolean clicked = false;
+        for (AccessibilityNodeInfo node : allNodes) {
+            try {
+                CharSequence t = node.getText();
+                CharSequence cd = node.getContentDescription();
+                String textStr = t != null ? t.toString().toLowerCase() : "";
+                String cdStr = cd != null ? cd.toString().toLowerCase() : "";
+                if (textStr.contains(lower) || cdStr.contains(lower)) {
+                    node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                    clicked = true;
+                    break;
+                }
+            } finally {
+                node.recycle();
+            }
+        }
+        return clicked;
     }
 
     /**

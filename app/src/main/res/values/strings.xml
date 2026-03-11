@@ -21,6 +21,11 @@
     <string name="button_login3">Login 3</string>
     <string name="button_login4">Login 4</string>
     <string name="button_login5">Login 5</string>
+    <string name="button_login6">Login 6</string>
+    <string name="button_login7">Login 7</string>
+    <string name="button_login8">Login 8</string>
+    <string name="button_login9">Login 9</string>
+    <string name="button_login10">Login 10</string>
     <string name="saved_successfully">Gespeichert</string>
 
     <!-- Toast messages -->

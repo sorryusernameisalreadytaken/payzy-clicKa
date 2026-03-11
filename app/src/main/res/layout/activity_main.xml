@@ -97,4 +97,39 @@
         android:layout_marginTop="8dp"
         android:text="@string/button_login5" />
 
+    <Button
+        android:id="@+id/button_login6"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/button_login6" />
+
+    <Button
+        android:id="@+id/button_login7"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/button_login7" />
+
+    <Button
+        android:id="@+id/button_login8"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/button_login8" />
+
+    <Button
+        android:id="@+id/button_login9"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/button_login9" />
+
+    <Button
+        android:id="@+id/button_login10"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/button_login10" />
+
 </LinearLayout>

@@ -44,6 +44,11 @@ public class MainActivity extends AppCompatActivity {
         Button loginButton3 = findViewById(R.id.button_login3);
         Button loginButton4 = findViewById(R.id.button_login4);
         Button loginButton5 = findViewById(R.id.button_login5);
+        Button loginButton6 = findViewById(R.id.button_login6);
+        Button loginButton7 = findViewById(R.id.button_login7);
+        Button loginButton8 = findViewById(R.id.button_login8);
+        Button loginButton9 = findViewById(R.id.button_login9);
+        Button loginButton10 = findViewById(R.id.button_login10);
 
         // Pre-populate fields with stored values if available
         String savedUsername = PrefsHelper.getUsername(this);
@@ -148,8 +153,20 @@ public class MainActivity extends AppCompatActivity {
                     approach = 3;
                 } else if (id == R.id.button_login4) {
                     approach = 4;
-                } else {
+                } else if (id == R.id.button_login5) {
                     approach = 5;
+                } else if (id == R.id.button_login6) {
+                    approach = 6;
+                } else if (id == R.id.button_login7) {
+                    approach = 7;
+                } else if (id == R.id.button_login8) {
+                    approach = 8;
+                } else if (id == R.id.button_login9) {
+                    approach = 9;
+                } else if (id == R.id.button_login10) {
+                    approach = 10;
+                } else {
+                    approach = 1;
                 }
                 service.performLoginApproach(approach, username, password);
             }
@@ -159,6 +176,11 @@ public class MainActivity extends AppCompatActivity {
         loginButton3.setOnClickListener(loginClickListener);
         loginButton4.setOnClickListener(loginClickListener);
         loginButton5.setOnClickListener(loginClickListener);
+        loginButton6.setOnClickListener(loginClickListener);
+        loginButton7.setOnClickListener(loginClickListener);
+        loginButton8.setOnClickListener(loginClickListener);
+        loginButton9.setOnClickListener(loginClickListener);
+        loginButton10.setOnClickListener(loginClickListener);
     }
 
     /**
