@@ -36,4 +36,14 @@
     <!-- Accessibility service metadata -->
     <string name="accessibility_service_label">Payzy clicKa Logger</string>
     <string name="accessibility_service_description">Zeichnet Bedienungshilfen-Ereignisse für späteres Abspielen auf.</string>
+
+    <!-- Watcher buttons and labels -->
+    <string name="button_login_watcher_start">Login-Watcher starten</string>
+    <string name="button_login_watcher_stop">Login-Watcher stoppen</string>
+    <string name="button_wallet_watcher_start">Wallet-Watcher starten</string>
+    <string name="button_wallet_watcher_stop">Wallet-Watcher stoppen</string>
+    <string name="button_coins_watcher_start">Coins-Watcher starten</string>
+    <string name="button_coins_watcher_stop">Coins-Watcher stoppen</string>
+    <string name="label_wallet">Guthaben</string>
+    <string name="label_coins">Coins</string>
 </resources>

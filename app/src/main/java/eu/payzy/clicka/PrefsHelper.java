@@ -17,6 +17,10 @@ public final class PrefsHelper {
     // Key for storing the username
     private static final String KEY_USERNAME = "username";
 
+    // Keys for storing wallet and coins values
+    private static final String KEY_WALLET_VALUE = "wallet_value";
+    private static final String KEY_COINS_VALUE = "coins_value";
+
     private PrefsHelper() {
         // Prevent instantiation
     }
@@ -110,5 +114,51 @@ public final class PrefsHelper {
     public static String getUsername(Context context) {
         SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
         return prefs.getString(KEY_USERNAME, "");
+    }
+
+    /**
+     * Stores the current wallet value in shared preferences. This method overwrites any
+     * previously stored value.
+     *
+     * @param context a valid application or activity context
+     * @param value the wallet balance to persist (may be empty)
+     */
+    public static void setWalletValue(Context context, String value) {
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        prefs.edit().putString(KEY_WALLET_VALUE, value != null ? value : "").apply();
+    }
+
+    /**
+     * Retrieves the stored wallet value.
+     *
+     * @param context a valid application or activity context
+     * @return the stored wallet value or an empty string if not set
+     */
+    public static String getWalletValue(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        return prefs.getString(KEY_WALLET_VALUE, "");
+    }
+
+    /**
+     * Stores the current coins amount in shared preferences. This method overwrites any
+     * previously stored value.
+     *
+     * @param context a valid application or activity context
+     * @param value the coins amount to persist (may be empty)
+     */
+    public static void setCoinsValue(Context context, String value) {
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        prefs.edit().putString(KEY_COINS_VALUE, value != null ? value : "").apply();
+    }
+
+    /**
+     * Retrieves the stored coins amount.
+     *
+     * @param context a valid application or activity context
+     * @return the stored coins amount or an empty string if not set
+     */
+    public static String getCoinsValue(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        return prefs.getString(KEY_COINS_VALUE, "");
     }
 }

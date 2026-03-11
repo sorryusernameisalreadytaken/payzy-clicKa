@@ -1,10 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center_horizontal"
-    android:padding="16dp">
+    android:layout_height="match_parent">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center_horizontal"
+        android:padding="16dp">
 
     <Button
         android:id="@+id/button_accessibility"
@@ -62,74 +66,59 @@
         android:text="@string/button_save" />
 
     <!-- Buttons to trigger the login automation using different approaches -->
+    <!-- Login watcher toggle button -->
     <Button
-        android:id="@+id/button_login1"
+        android:id="@+id/button_login_watcher"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:text="@string/button_login1" />
+        android:text="@string/button_login_watcher_start" />
 
+    <!-- Wallet watcher toggle button -->
     <Button
-        android:id="@+id/button_login2"
+        android:id="@+id/button_wallet_watcher"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:text="@string/button_login2" />
+        android:text="@string/button_wallet_watcher_start" />
 
+    <!-- Coins watcher toggle button -->
     <Button
-        android:id="@+id/button_login3"
+        android:id="@+id/button_coins_watcher"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:text="@string/button_login3" />
+        android:text="@string/button_coins_watcher_start" />
 
-    <Button
-        android:id="@+id/button_login4"
+    <!-- Display for current wallet balance -->
+    <TextView
+        android:id="@+id/text_wallet_label"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/button_login4" />
+        android:layout_marginTop="24dp"
+        android:text="@string/label_wallet"
+        android:textStyle="bold" />
 
-    <Button
-        android:id="@+id/button_login5"
+    <TextView
+        android:id="@+id/text_wallet_value"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/button_login5" />
+        android:text="—" />
 
-    <Button
-        android:id="@+id/button_login6"
+    <!-- Display for current coins amount -->
+    <TextView
+        android:id="@+id/text_coins_label"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/button_login6" />
+        android:layout_marginTop="16dp"
+        android:text="@string/label_coins"
+        android:textStyle="bold" />
 
-    <Button
-        android:id="@+id/button_login7"
+    <TextView
+        android:id="@+id/text_coins_value"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/button_login7" />
+        android:text="—" />
 
-    <Button
-        android:id="@+id/button_login8"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/button_login8" />
-
-    <Button
-        android:id="@+id/button_login9"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/button_login9" />
-
-    <Button
-        android:id="@+id/button_login10"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/button_login10" />
-
-</LinearLayout>
+    </LinearLayout>
+</ScrollView>

@@ -12,6 +12,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.widget.Toast;
 
+import eu.payzy.clicka.MainActivity;
 import org.json.JSONObject;
 
 import java.io.File;
@@ -56,6 +57,42 @@ public class AccessibilityLoggerService extends AccessibilityService {
      * should continue running or be cancelled in favour of a newer login attempt.
      */
     private int currentLoginAttemptId = 0;
+
+    /**
+     * Indicates whether the login watcher is currently active. When true, the service
+     * continuously scans the UI for login elements and performs the login when found.
+     */
+    private volatile boolean loginWatcherActive = false;
+
+    /**
+     * Unique identifier for the current login watcher thread. Incremented each time
+     * the watcher is toggled. Used to cancel a running watcher when a new one starts.
+     */
+    private volatile int loginWatcherId = 0;
+
+    /**
+     * Indicates whether the wallet watcher is currently active. When true, the service
+     * scans the UI for elements containing the word "Guthaben" and updates the
+     * displayed balance when found.
+     */
+    private volatile boolean walletWatcherActive = false;
+
+    /**
+     * Unique identifier for the current wallet watcher thread.
+     */
+    private volatile int walletWatcherId = 0;
+
+    /**
+     * Indicates whether the coins watcher is currently active. When true, the service
+     * scans the UI for elements containing the word "Coins" and updates the
+     * displayed coin count when found.
+     */
+    private volatile boolean coinsWatcherActive = false;
+
+    /**
+     * Unique identifier for the current coins watcher thread.
+     */
+    private volatile int coinsWatcherId = 0;
 
     @Override
     public void onServiceConnected() {
@@ -175,6 +212,96 @@ public class AccessibilityLoggerService extends AccessibilityService {
                 runLoginLoop(approach, username, password, attemptId);
             }
         }).start();
+    }
+
+    /**
+     * Toggles the login watcher on or off. When enabled, the service will repeatedly
+     * attempt to detect the login screen and perform the login using a combination
+     * of strategies 2 and 4 (password field detection and partial text matching).
+     *
+     * @param username the user name to use when performing the login
+     * @param password the password to enter
+     * @return {@code true} if the watcher is now active, {@code false} if it was
+     *         stopped
+     */
+    public synchronized boolean toggleLoginWatcher(final String username, final String password) {
+        if (loginWatcherActive) {
+            // Stop existing watcher
+            loginWatcherActive = false;
+            loginWatcherId++;
+            showToast("Login-Watcher gestoppt");
+            return false;
+        } else {
+            // Start new watcher
+            loginWatcherActive = true;
+            final int watcherId = ++loginWatcherId;
+            showToast("Login-Watcher gestartet");
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    runLoginWatcherLoop(username, password, watcherId);
+                }
+            }).start();
+            return true;
+        }
+    }
+
+    /**
+     * Toggles the wallet watcher on or off. When enabled, the service will scan
+     * continuously for UI elements containing the word "Guthaben", extract the
+     * balance value, update the main UI and click the element. When disabled,
+     * the scanning thread is cancelled.
+     *
+     * @return {@code true} if the watcher is now active, {@code false} if it was
+     *         stopped
+     */
+    public synchronized boolean toggleWalletWatcher() {
+        if (walletWatcherActive) {
+            walletWatcherActive = false;
+            walletWatcherId++;
+            showToast("Wallet-Watcher gestoppt");
+            return false;
+        } else {
+            walletWatcherActive = true;
+            final int watcherId = ++walletWatcherId;
+            showToast("Wallet-Watcher gestartet");
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    runWalletWatcherLoop(watcherId);
+                }
+            }).start();
+            return true;
+        }
+    }
+
+    /**
+     * Toggles the coins watcher on or off. When enabled, the service will scan
+     * continuously for UI elements containing the word "Coins", extract the
+     * coins amount, update the main UI and click the element. When disabled,
+     * the scanning thread is cancelled.
+     *
+     * @return {@code true} if the watcher is now active, {@code false} if it was
+     *         stopped
+     */
+    public synchronized boolean toggleCoinsWatcher() {
+        if (coinsWatcherActive) {
+            coinsWatcherActive = false;
+            coinsWatcherId++;
+            showToast("Coins-Watcher gestoppt");
+            return false;
+        } else {
+            coinsWatcherActive = true;
+            final int watcherId = ++coinsWatcherId;
+            showToast("Coins-Watcher gestartet");
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    runCoinsWatcherLoop(watcherId);
+                }
+            }).start();
+            return true;
+        }
     }
 
     /**
@@ -575,6 +702,238 @@ public class AccessibilityLoggerService extends AccessibilityService {
                 return false;
         }
         return success;
+    }
+
+    /**
+     * Continuously scans for login elements and performs the login when found. The
+     * loop runs until the watcher is deactivated or a newer watcher is started.
+     *
+     * @param username the user name for the login
+     * @param password the password for the login
+     * @param watcherId the identifier for this watcher instance
+     */
+    private void runLoginWatcherLoop(String username, String password, int watcherId) {
+        while (loginWatcherActive && watcherId == loginWatcherId) {
+            boolean success = attemptLoginWatcher(username, password, watcherId);
+            if (success) {
+                // Stop the watcher after a successful login to prevent repeated logins
+                toggleLoginWatcher(username, password);
+                showToast("Login-Watcher: Login durchgeführt");
+                break;
+            }
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                break;
+            }
+        }
+    }
+
+    /**
+     * Attempts a single login operation using a combination of strategies. This
+     * method first tries strategy 2 (password field + exact login button text) and
+     * if that fails, falls back to strategy 4 (first EditText + partial match).
+     *
+     * @param username the user name
+     * @param password the password
+     * @param watcherId the current watcher id
+     * @return true if a login attempt was executed (i.e., the login button was clicked)
+     */
+    private boolean attemptLoginWatcher(String username, String password, int watcherId) {
+        // We ignore watcherId here because runLoginWatcherLoop handles cancellation
+        // First try strategy2
+        boolean success = attemptStrategy2(username, password, -1);
+        if (!success) {
+            success = attemptStrategy4(username, password, -1);
+        }
+        return success;
+    }
+
+    /**
+     * Continuously scans for Guthaben elements and updates the stored wallet value. When
+     * a matching element is found, its text is parsed to extract the balance and
+     * the element is clicked. The loop runs until deactivated or superseded.
+     *
+     * @param watcherId the identifier for this watcher instance
+     */
+    private void runWalletWatcherLoop(int watcherId) {
+        while (walletWatcherActive && watcherId == walletWatcherId) {
+            AccessibilityNodeInfo root = getRootInActiveWindow();
+            if (root != null) {
+                try {
+                    java.util.List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByText("Guthaben");
+                    boolean found = false;
+                    if (nodes != null) {
+                        for (AccessibilityNodeInfo node : nodes) {
+                            try {
+                                CharSequence text = node.getText();
+                                if (text != null && text.toString().toLowerCase().contains("guthaben")) {
+                                    String full = text.toString();
+                                    // Extract numeric value (up to the first space or before the word Guthaben)
+                                    String value = extractNumericValue(full);
+                                    // Persist and update UI
+                                    PrefsHelper.setWalletValue(this, value);
+                                    MainActivity.updateWalletValueStatic(value);
+                                    showToast("Wallet gefunden: " + value);
+                                    // Click the card
+                                    node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                                    found = true;
+                                    break;
+                                }
+                            } finally {
+                                node.recycle();
+                            }
+                        }
+                    }
+                    // Optionally search by euro symbol if not found
+                    if (!found) {
+                        // fallback search: find nodes containing € and guthaben in content description or text
+                        // A simple breadth-first search for text containing € and guthaben
+                        java.util.LinkedList<AccessibilityNodeInfo> queue = new java.util.LinkedList<>();
+                        queue.add(AccessibilityNodeInfo.obtain(root));
+                        while (!queue.isEmpty() && !found) {
+                            AccessibilityNodeInfo n = queue.removeFirst();
+                            try {
+                                CharSequence t = n.getText();
+                                CharSequence cd = n.getContentDescription();
+                                String ts = t != null ? t.toString() : "";
+                                String cs = cd != null ? cd.toString() : "";
+                                if ((ts.contains("€") && ts.toLowerCase().contains("guthaben")) ||
+                                    (cs.contains("€") && cs.toLowerCase().contains("guthaben"))) {
+                                    String full = !ts.isEmpty() ? ts : cs;
+                                    String value = extractNumericValue(full);
+                                    PrefsHelper.setWalletValue(this, value);
+                                    MainActivity.updateWalletValueStatic(value);
+                                    showToast("Wallet gefunden: " + value);
+                                    n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                                    found = true;
+                                    break;
+                                }
+                                for (int i = 0; i < n.getChildCount(); i++) {
+                                    AccessibilityNodeInfo child = n.getChild(i);
+                                    if (child != null) {
+                                        queue.addLast(child);
+                                    }
+                                }
+                            } finally {
+                                n.recycle();
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "WalletWatcher error", e);
+                } finally {
+                    root.recycle();
+                }
+            }
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                break;
+            }
+        }
+    }
+
+    /**
+     * Continuously scans for Coins elements and updates the stored coin count. When
+     * a matching element is found, its text is parsed to extract the amount and
+     * the element is clicked. The loop runs until deactivated or superseded.
+     *
+     * @param watcherId the identifier for this watcher instance
+     */
+    private void runCoinsWatcherLoop(int watcherId) {
+        while (coinsWatcherActive && watcherId == coinsWatcherId) {
+            AccessibilityNodeInfo root = getRootInActiveWindow();
+            if (root != null) {
+                try {
+                    java.util.List<AccessibilityNodeInfo> nodes = root.findAccessibilityNodeInfosByText("Coins");
+                    boolean found = false;
+                    if (nodes != null) {
+                        for (AccessibilityNodeInfo node : nodes) {
+                            try {
+                                CharSequence text = node.getText();
+                                if (text != null && text.toString().toLowerCase().contains("coins")) {
+                                    String full = text.toString();
+                                    String value = extractNumericValue(full);
+                                    PrefsHelper.setCoinsValue(this, value);
+                                    MainActivity.updateCoinsValueStatic(value);
+                                    showToast("Coins gefunden: " + value);
+                                    node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                                    found = true;
+                                    break;
+                                }
+                            } finally {
+                                node.recycle();
+                            }
+                        }
+                    }
+                    if (!found) {
+                        // fallback search by scanning all nodes for text containing "Coins"
+                        java.util.LinkedList<AccessibilityNodeInfo> queue = new java.util.LinkedList<>();
+                        queue.add(AccessibilityNodeInfo.obtain(root));
+                        while (!queue.isEmpty() && !found) {
+                            AccessibilityNodeInfo n = queue.removeFirst();
+                            try {
+                                CharSequence t = n.getText();
+                                CharSequence cd = n.getContentDescription();
+                                String ts = t != null ? t.toString() : "";
+                                String cs = cd != null ? cd.toString() : "";
+                                if ((ts.toLowerCase().contains("coins")) || (cs.toLowerCase().contains("coins"))) {
+                                    String full = !ts.isEmpty() ? ts : cs;
+                                    String value = extractNumericValue(full);
+                                    PrefsHelper.setCoinsValue(this, value);
+                                    MainActivity.updateCoinsValueStatic(value);
+                                    showToast("Coins gefunden: " + value);
+                                    n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                                    found = true;
+                                    break;
+                                }
+                                for (int i = 0; i < n.getChildCount(); i++) {
+                                    AccessibilityNodeInfo child = n.getChild(i);
+                                    if (child != null) {
+                                        queue.addLast(child);
+                                    }
+                                }
+                            } finally {
+                                n.recycle();
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    Log.e(TAG, "CoinsWatcher error", e);
+                } finally {
+                    root.recycle();
+                }
+            }
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                break;
+            }
+        }
+    }
+
+    /**
+     * Extracts a numeric value from a string containing a number, such as "56,39€ Guthaben"
+     * or "15 Coins". The method returns the first group of digits and separators
+     * encountered. If no digits are found, the original string is returned.
+     *
+     * @param full the full text from which to extract the numeric value
+     * @return the extracted numeric portion
+     */
+    private String extractNumericValue(String full) {
+        if (full == null) return "";
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile("[\u00A3\u20AC]?[0-9]+(?:[.,][0-9]+)?");
+        java.util.regex.Matcher m = p.matcher(full);
+        if (m.find()) {
+            return m.group().trim();
+        }
+        // fallback: return substring before first space
+        int idx = full.indexOf(' ');
+        if (idx > 0) {
+            return full.substring(0, idx);
+        }
+        return full;
     }
 
     /*

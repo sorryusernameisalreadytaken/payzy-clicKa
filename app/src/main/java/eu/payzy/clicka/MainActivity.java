@@ -22,6 +22,14 @@ import androidx.core.content.ContextCompat;
  * instead the user must enable the service in the system settings.
  */
 public class MainActivity extends AppCompatActivity {
+
+    /**
+     * Holds a reference to the currently visible instance of MainActivity. This is used
+     * by the accessibility service to update UI elements (wallet and coins values) on
+     * the main thread. It is assigned in {@link #onResume()} and cleared in
+     * {@link #onPause()}.
+     */
+    private static MainActivity currentInstance;
     private static final int REQUEST_WRITE_STORAGE = 100;
     private static final int REQUEST_MANAGE_STORAGE = 101;
 
@@ -39,24 +47,28 @@ public class MainActivity extends AppCompatActivity {
         android.widget.EditText editPassword = findViewById(R.id.edit_password);
         android.widget.EditText editPin = findViewById(R.id.edit_pin);
         Button saveButton = findViewById(R.id.button_save_credentials);
-        Button loginButton1 = findViewById(R.id.button_login1);
-        Button loginButton2 = findViewById(R.id.button_login2);
-        Button loginButton3 = findViewById(R.id.button_login3);
-        Button loginButton4 = findViewById(R.id.button_login4);
-        Button loginButton5 = findViewById(R.id.button_login5);
-        Button loginButton6 = findViewById(R.id.button_login6);
-        Button loginButton7 = findViewById(R.id.button_login7);
-        Button loginButton8 = findViewById(R.id.button_login8);
-        Button loginButton9 = findViewById(R.id.button_login9);
-        Button loginButton10 = findViewById(R.id.button_login10);
+        // Watcher buttons and labels
+        Button loginWatcherButton = findViewById(R.id.button_login_watcher);
+        Button walletWatcherButton = findViewById(R.id.button_wallet_watcher);
+        Button coinsWatcherButton = findViewById(R.id.button_coins_watcher);
 
-        // Pre-populate fields with stored values if available
+        android.widget.TextView textWalletValue = findViewById(R.id.text_wallet_value);
+        android.widget.TextView textCoinsValue = findViewById(R.id.text_coins_value);
+
+        // Pre-populate fields with stored values if available. The username is only set
+        // when a value exists; otherwise the field remains empty. The wallet and coins
+        // values are also displayed if previously recorded.
         String savedUsername = PrefsHelper.getUsername(this);
         if (savedUsername != null && !savedUsername.isEmpty()) {
             editUsername.setText(savedUsername);
         }
         editPassword.setText(PrefsHelper.getPassword(this));
         editPin.setText(PrefsHelper.getPin(this));
+        // Display stored wallet and coins values
+        String walletValue = PrefsHelper.getWalletValue(this);
+        String coinsValue = PrefsHelper.getCoinsValue(this);
+        textWalletValue.setText(walletValue != null && !walletValue.isEmpty() ? walletValue : "—");
+        textCoinsValue.setText(coinsValue != null && !coinsValue.isEmpty() ? coinsValue : "—");
 
         // Launch system accessibility settings so the user can enable the service.
         accessibilityButton.setOnClickListener(new View.OnClickListener() {
@@ -129,8 +141,8 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // Handle login automation using five different approaches
-        View.OnClickListener loginClickListener = new View.OnClickListener() {
+        // Handle login watcher toggle
+        loginWatcherButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 String username = editUsername.getText().toString();
@@ -143,44 +155,39 @@ public class MainActivity extends AppCompatActivity {
                     Toast.makeText(MainActivity.this, "Dienst nicht aktiv", Toast.LENGTH_SHORT).show();
                     return;
                 }
-                int approach;
-                int id = v.getId();
-                if (id == R.id.button_login1) {
-                    approach = 1;
-                } else if (id == R.id.button_login2) {
-                    approach = 2;
-                } else if (id == R.id.button_login3) {
-                    approach = 3;
-                } else if (id == R.id.button_login4) {
-                    approach = 4;
-                } else if (id == R.id.button_login5) {
-                    approach = 5;
-                } else if (id == R.id.button_login6) {
-                    approach = 6;
-                } else if (id == R.id.button_login7) {
-                    approach = 7;
-                } else if (id == R.id.button_login8) {
-                    approach = 8;
-                } else if (id == R.id.button_login9) {
-                    approach = 9;
-                } else if (id == R.id.button_login10) {
-                    approach = 10;
-                } else {
-                    approach = 1;
-                }
-                service.performLoginApproach(approach, username, password);
+                boolean active = service.toggleLoginWatcher(username, password);
+                // Update label according to new state
+                loginWatcherButton.setText(active ? R.string.button_login_watcher_stop : R.string.button_login_watcher_start);
             }
-        };
-        loginButton1.setOnClickListener(loginClickListener);
-        loginButton2.setOnClickListener(loginClickListener);
-        loginButton3.setOnClickListener(loginClickListener);
-        loginButton4.setOnClickListener(loginClickListener);
-        loginButton5.setOnClickListener(loginClickListener);
-        loginButton6.setOnClickListener(loginClickListener);
-        loginButton7.setOnClickListener(loginClickListener);
-        loginButton8.setOnClickListener(loginClickListener);
-        loginButton9.setOnClickListener(loginClickListener);
-        loginButton10.setOnClickListener(loginClickListener);
+        });
+
+        // Handle wallet watcher toggle
+        walletWatcherButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                AccessibilityLoggerService service = AccessibilityLoggerService.getInstance();
+                if (service == null) {
+                    Toast.makeText(MainActivity.this, "Dienst nicht aktiv", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                boolean active = service.toggleWalletWatcher();
+                walletWatcherButton.setText(active ? R.string.button_wallet_watcher_stop : R.string.button_wallet_watcher_start);
+            }
+        });
+
+        // Handle coins watcher toggle
+        coinsWatcherButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                AccessibilityLoggerService service = AccessibilityLoggerService.getInstance();
+                if (service == null) {
+                    Toast.makeText(MainActivity.this, "Dienst nicht aktiv", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                boolean active = service.toggleCoinsWatcher();
+                coinsWatcherButton.setText(active ? R.string.button_coins_watcher_stop : R.string.button_coins_watcher_start);
+            }
+        });
     }
 
     /**
@@ -202,6 +209,81 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 Toast.makeText(this, R.string.permission_denied, Toast.LENGTH_SHORT).show();
             }
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        currentInstance = this;
+        // Update displayed wallet and coins values from preferences when resuming
+        updateWallet(PrefsHelper.getWalletValue(this));
+        updateCoins(PrefsHelper.getCoinsValue(this));
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (currentInstance == this) {
+            currentInstance = null;
+        }
+    }
+
+    /**
+     * Updates the wallet balance display on the UI thread.
+     *
+     * @param value the wallet balance to display (may be null or empty)
+     */
+    public void updateWallet(final String value) {
+        final String display = (value != null && !value.isEmpty()) ? value : "—";
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                android.widget.TextView textWallet = findViewById(R.id.text_wallet_value);
+                textWallet.setText(display);
+            }
+        });
+    }
+
+    /**
+     * Updates the coins amount display on the UI thread.
+     *
+     * @param value the coins amount to display (may be null or empty)
+     */
+    public void updateCoins(final String value) {
+        final String display = (value != null && !value.isEmpty()) ? value : "—";
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                android.widget.TextView textCoins = findViewById(R.id.text_coins_value);
+                textCoins.setText(display);
+            }
+        });
+    }
+
+    /**
+     * Static helper called by the accessibility service to update the wallet balance
+     * on the currently visible instance of MainActivity. If no instance is
+     * available, the value is stored in preferences and will be shown next time.
+     *
+     * @param value the wallet balance to display
+     */
+    public static void updateWalletValueStatic(String value) {
+        if (currentInstance != null) {
+            currentInstance.updateWallet(value);
+        }
+    }
+
+    /**
+     * Static helper called by the accessibility service to update the coins amount
+     * on the currently visible instance of MainActivity. If no instance is
+     * available, the value is stored in preferences and will be shown next time.
+     *
+     * @param value the coins amount to display
+     */
+    public static void updateCoinsValueStatic(String value) {
+        if (currentInstance != null) {
+            currentInstance.updateCoins(value);
         }
     }
 }
