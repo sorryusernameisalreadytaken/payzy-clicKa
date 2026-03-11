@@ -26,4 +26,30 @@
         android:layout_marginTop="16dp"
         android:text="@string/button_record_start" />
 
+    <!-- Input field for the password -->
+    <EditText
+        android:id="@+id/edit_password"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:hint="@string/hint_password"
+        android:inputType="textPassword" />
+
+    <!-- Input field for the PIN (numeric) -->
+    <EditText
+        android:id="@+id/edit_pin"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:hint="@string/hint_pin"
+        android:inputType="numberPassword" />
+
+    <!-- Button to save the entered password and PIN -->
+    <Button
+        android:id="@+id/button_save_credentials"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="@string/button_save" />
+
 </LinearLayout>

@@ -9,6 +9,12 @@
     <string name="button_record_start">Aufnahme starten</string>
     <string name="button_record_stop">Aufnahme stoppen</string>
 
+    <!-- Labels and hints for password/PIN fields -->
+    <string name="hint_password">Passwort</string>
+    <string name="hint_pin">PIN</string>
+    <string name="button_save">Speichern</string>
+    <string name="saved_successfully">Gespeichert</string>
+
     <!-- Toast messages -->
     <string name="permission_granted">Schreibzugriff erteilt</string>
     <string name="permission_denied">Schreibzugriff verweigert</string>

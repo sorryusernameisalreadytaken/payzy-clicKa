@@ -32,6 +32,15 @@ public class MainActivity extends AppCompatActivity {
         Button permissionButton = findViewById(R.id.button_permission);
         Button recordButton = findViewById(R.id.button_record);
 
+        // New UI elements for password and PIN
+        android.widget.EditText editPassword = findViewById(R.id.edit_password);
+        android.widget.EditText editPin = findViewById(R.id.edit_pin);
+        Button saveButton = findViewById(R.id.button_save_credentials);
+
+        // Pre-populate fields with stored values if available
+        editPassword.setText(PrefsHelper.getPassword(this));
+        editPin.setText(PrefsHelper.getPin(this));
+
         // Launch system accessibility settings so the user can enable the service.
         accessibilityButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -86,6 +95,18 @@ public class MainActivity extends AppCompatActivity {
                 boolean recording = PrefsHelper.isRecording(MainActivity.this);
                 PrefsHelper.setRecording(MainActivity.this, !recording);
                 updateRecordButtonLabel(recordButton);
+            }
+        });
+
+        // Handle saving of password and PIN
+        saveButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String password = editPassword.getText().toString();
+                String pin = editPin.getText().toString();
+                PrefsHelper.setPassword(MainActivity.this, password);
+                PrefsHelper.setPin(MainActivity.this, pin);
+                android.widget.Toast.makeText(MainActivity.this, R.string.saved_successfully, android.widget.Toast.LENGTH_SHORT).show();
             }
         });
     }
