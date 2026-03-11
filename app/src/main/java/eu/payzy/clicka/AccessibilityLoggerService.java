@@ -38,9 +38,19 @@ public class AccessibilityLoggerService extends AccessibilityService {
      */
     private long lastEventTimestamp = -1;
 
+    /**
+     * Holds a reference to the currently running instance of this service. Because
+     * accessibility services are instantiated by the system, we cannot create
+     * instances directly. This static reference enables the main activity to
+     * communicate with the service when it is active. It will be assigned in
+     * {@link #onServiceConnected()} and cleared in {@link #onDestroy()}.
+     */
+    private static AccessibilityLoggerService instance;
+
     @Override
     public void onServiceConnected() {
         super.onServiceConnected();
+        instance = this;
         // Configure the service to listen for all events. This call is optional if the
         // static xml configuration already specifies the same flags, but helps ensure
         // consistency when the service is restarted programmatically.
@@ -66,6 +76,100 @@ public class AccessibilityLoggerService extends AccessibilityService {
     @Override
     public void onInterrupt() {
         // No special interrupt handling required.
+    }
+
+    /**
+     * Returns the currently active instance of this service, or {@code null} if
+     * the service has not been started by the user. The returned instance can be
+     * used to perform automated interactions such as entering credentials and
+     * clicking buttons.
+     */
+    public static AccessibilityLoggerService getInstance() {
+        return instance;
+    }
+
+    /**
+     * Searches the view hierarchy for nodes matching the specified criteria. This helper
+     * method collects all password fields in the tree by checking the class name and
+     * password property. Matching nodes are cloned and added to the provided list. The
+     * original nodes should not be recycled while still in use.
+     *
+     * @param node the root node to search
+     * @param out a list to collect matching nodes
+     */
+    private void collectPasswordFields(AccessibilityNodeInfo node, java.util.List<AccessibilityNodeInfo> out) {
+        if (node == null) return;
+        try {
+            CharSequence className = node.getClassName();
+            if (className != null && "android.widget.EditText".contentEquals(className)) {
+                if (node.isPassword()) {
+                    out.add(AccessibilityNodeInfo.obtain(node));
+                }
+            }
+            for (int i = 0; i < node.getChildCount(); i++) {
+                AccessibilityNodeInfo child = node.getChild(i);
+                collectPasswordFields(child, out);
+                if (child != null) child.recycle();
+            }
+        } catch (Exception e) {
+            // Ignore exceptions while traversing
+        }
+    }
+
+    /**
+     * Performs the login automation by detecting the welcome screen, filling in the password
+     * and clicking the login button. This method runs on the service thread and
+     * interacts with the accessibility nodes directly. If the required UI elements
+     * cannot be found, the method silently returns.
+     *
+     * @param username the user name used to detect the welcome screen
+     * @param password the password to enter into the password field
+     */
+    public void performLogin(String username, String password) {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) {
+            return;
+        }
+        try {
+            // Detect the welcome message to ensure we are on the login screen
+            String welcomeText = "Willkommen," + username;
+            java.util.List<AccessibilityNodeInfo> welcomeNodes = root.findAccessibilityNodeInfosByText(welcomeText);
+            boolean welcomeDetected = welcomeNodes != null && !welcomeNodes.isEmpty();
+            if (!welcomeDetected) {
+                // Not on the expected screen
+                return;
+            }
+            // Find password fields
+            java.util.List<AccessibilityNodeInfo> passwords = new java.util.ArrayList<>();
+            collectPasswordFields(root, passwords);
+            if (!passwords.isEmpty()) {
+                // Use the first password field found
+                AccessibilityNodeInfo pwdNode = passwords.get(0);
+                android.os.Bundle args = new android.os.Bundle();
+                args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, password);
+                pwdNode.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
+                pwdNode.recycle();
+            }
+            // Find the login button by its text or content description
+            java.util.List<AccessibilityNodeInfo> loginButtons = root.findAccessibilityNodeInfosByText("Anmelden");
+            if (loginButtons != null) {
+                for (AccessibilityNodeInfo btn : loginButtons) {
+                    try {
+                        if (btn.isClickable()) {
+                            btn.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                            break;
+                        }
+                    } finally {
+                        btn.recycle();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error performing login", e);
+        } finally {
+            // Always recycle the root node to avoid memory leaks
+            root.recycle();
+        }
     }
 
     /**
@@ -231,6 +335,7 @@ public class AccessibilityLoggerService extends AccessibilityService {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        instance = null;
         // Close the writers when the service is destroyed to free file handles.
         if (csvWriter != null) {
             try {

@@ -10,9 +10,11 @@
     <string name="button_record_stop">Aufnahme stoppen</string>
 
     <!-- Labels and hints for password/PIN fields -->
+    <string name="hint_username">Benutzername</string>
     <string name="hint_password">Passwort</string>
     <string name="hint_pin">PIN</string>
     <string name="button_save">Speichern</string>
+    <string name="button_login">Login</string>
     <string name="saved_successfully">Gespeichert</string>
 
     <!-- Toast messages -->

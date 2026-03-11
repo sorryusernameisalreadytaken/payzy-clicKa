@@ -14,6 +14,8 @@ public final class PrefsHelper {
     // Keys for storing password and PIN
     private static final String KEY_PASSWORD = "password";
     private static final String KEY_PIN = "pin";
+    // Key for storing the username
+    private static final String KEY_USERNAME = "username";
 
     private PrefsHelper() {
         // Prevent instantiation
@@ -85,5 +87,28 @@ public final class PrefsHelper {
     public static String getPin(Context context) {
         SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
         return prefs.getString(KEY_PIN, "");
+    }
+
+    /**
+     * Stores the user-defined username in shared preferences. This method overwrites any
+     * previously stored value.
+     *
+     * @param context a valid application or activity context
+     * @param username the user name to persist (may be empty)
+     */
+    public static void setUsername(Context context, String username) {
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        prefs.edit().putString(KEY_USERNAME, username != null ? username : "").apply();
+    }
+
+    /**
+     * Retrieves the stored username.
+     *
+     * @param context a valid application or activity context
+     * @return the stored username or an empty string if not set
+     */
+    public static String getUsername(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        return prefs.getString(KEY_USERNAME, "");
     }
 }

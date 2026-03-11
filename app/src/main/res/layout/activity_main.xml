@@ -26,12 +26,21 @@
         android:layout_marginTop="16dp"
         android:text="@string/button_record_start" />
 
+    <!-- Input field for the user name -->
+    <EditText
+        android:id="@+id/edit_username"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:hint="@string/hint_username"
+        android:inputType="textPersonName" />
+
     <!-- Input field for the password -->
     <EditText
         android:id="@+id/edit_password"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
+        android:layout_marginTop="16dp"
         android:hint="@string/hint_password"
         android:inputType="textPassword" />
 
@@ -51,5 +60,13 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
         android:text="@string/button_save" />
+
+    <!-- Button to trigger the login automation -->
+    <Button
+        android:id="@+id/button_login"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="@string/button_login" />
 
 </LinearLayout>

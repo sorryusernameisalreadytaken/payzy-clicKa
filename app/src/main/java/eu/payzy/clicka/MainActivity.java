@@ -9,6 +9,8 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.Toast;
 
+import eu.payzy.clicka.AccessibilityLoggerService;
+
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -32,12 +34,20 @@ public class MainActivity extends AppCompatActivity {
         Button permissionButton = findViewById(R.id.button_permission);
         Button recordButton = findViewById(R.id.button_record);
 
-        // New UI elements for password and PIN
+        // New UI elements for username, password and PIN
+        android.widget.EditText editUsername = findViewById(R.id.edit_username);
         android.widget.EditText editPassword = findViewById(R.id.edit_password);
         android.widget.EditText editPin = findViewById(R.id.edit_pin);
         Button saveButton = findViewById(R.id.button_save_credentials);
+        Button loginButton = findViewById(R.id.button_login);
 
         // Pre-populate fields with stored values if available
+        String savedUsername = PrefsHelper.getUsername(this);
+        if (savedUsername == null || savedUsername.isEmpty()) {
+            // Provide a sensible default as requested
+            savedUsername = "daniDee";
+        }
+        editUsername.setText(savedUsername);
         editPassword.setText(PrefsHelper.getPassword(this));
         editPin.setText(PrefsHelper.getPin(this));
 
@@ -98,15 +108,37 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // Handle saving of password and PIN
+        // Handle saving of username, password and PIN
         saveButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                String username = editUsername.getText().toString();
                 String password = editPassword.getText().toString();
                 String pin = editPin.getText().toString();
+                PrefsHelper.setUsername(MainActivity.this, username);
                 PrefsHelper.setPassword(MainActivity.this, password);
                 PrefsHelper.setPin(MainActivity.this, pin);
                 android.widget.Toast.makeText(MainActivity.this, R.string.saved_successfully, android.widget.Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        // Handle login automation
+        loginButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                // Retrieve current credentials from preferences
+                String username = editUsername.getText().toString();
+                String password = editPassword.getText().toString();
+                // Optionally save current values before login
+                PrefsHelper.setUsername(MainActivity.this, username);
+                PrefsHelper.setPassword(MainActivity.this, password);
+                // Obtain running service instance to perform login
+                AccessibilityLoggerService service = AccessibilityLoggerService.getInstance();
+                if (service != null) {
+                    service.performLogin(username, password);
+                } else {
+                    Toast.makeText(MainActivity.this, "Dienst nicht aktiv", Toast.LENGTH_SHORT).show();
+                }
             }
         });
     }
