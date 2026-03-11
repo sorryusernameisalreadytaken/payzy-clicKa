@@ -1,84 +1,48 @@
-name: Always Build & Release APK
+name: Build Android APK
+
+# This workflow builds debug and release APKs for the application on every push
+# to the main branch. It uses the Gradle wrapper included in the repository
+# and uploads the resulting APKs as artifacts that can be downloaded from
+# the GitHub Actions UI.
 
 on:
   push:
     branches:
-      - master
       - main
-  workflow_dispatch:
-
-concurrency:
-  group: always-release-${{ github.ref }}
-  cancel-in-progress: false
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
 
 jobs:
-  build_and_release:
+  build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write  # nötig um Tags + Releases erstellen zu dürfen
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Java
+        uses: actions/setup-java@v3
         with:
-          fetch-depth: 0
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: "17"
-          cache: gradle
-      - name: Make gradlew executable
-        run: chmod +x ./gradlew
-      - name: Build Debug + Release APK
-        run: ./gradlew :app:assembleDebug :app:assembleRelease
-      - name: Upload Debug APK (artifact)
-        uses: actions/upload-artifact@v4
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        run: ./gradlew assembleDebug assembleRelease
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v3
         with:
           name: app-debug
-          path: app/build/outputs/apk/debug/*.apk
-          if-no-files-found: error
-      - name: Upload Release APK (artifact)
-        uses: actions/upload-artifact@v4
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v3
         with:
           name: app-release
-          path: app/build/outputs/apk/release/*.apk
-          if-no-files-found: error
-      # 1) Erzeuge automatisch einen eindeutigen Tag auf den aktuellen Commit
-      - name: Create tag for this build
-        id: tagger
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const pad = (n) => String(n).padStart(2, "0");
-            const now = new Date(); // UTC
-            const ts =
-              now.getUTCFullYear() +
-              pad(now.getUTCMonth() + 1) +
-              pad(now.getUTCDate()) +
-              "-" +
-              pad(now.getUTCHours()) +
-              pad(now.getUTCMinutes()) +
-              pad(now.getUTCSeconds());
-            const tag = `auto-${ts}-${process.env.GITHUB_RUN_NUMBER}`;
-            const owner = context.repo.owner;
-            const repo = context.repo.repo;
-            const sha = context.sha;
-            // Tag-Ref erstellen (refs/tags/<tag>)
-            await github.rest.git.createRef({
-              owner,
-              repo,
-              ref: `refs/tags/${tag}`,
-              sha
-            });
-            core.setOutput("tag", tag);
-      # 2) Release erstellen und APKs anhängen
-      - name: Create GitHub Release and upload APKs
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.tagger.outputs.tag }}
-          name: "Auto Release ${{ steps.tagger.outputs.tag }}"
-          prerelease: false
-          generate_release_notes: true
-          files: |
-            app/build/outputs/apk/release/*.apk
-            app/build/outputs/apk/debug/*.apk
+          path: app/build/outputs/apk/release/app-release.apk

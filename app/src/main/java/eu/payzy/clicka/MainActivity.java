@@ -21,6 +21,7 @@ import androidx.core.content.ContextCompat;
  */
 public class MainActivity extends AppCompatActivity {
     private static final int REQUEST_WRITE_STORAGE = 100;
+    private static final int REQUEST_MANAGE_STORAGE = 101;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,15 +46,35 @@ public class MainActivity extends AppCompatActivity {
         permissionButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                        != PackageManager.PERMISSION_GRANTED) {
-                    ActivityCompat.requestPermissions(
-                            MainActivity.this,
-                            new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
-                            REQUEST_WRITE_STORAGE
-                    );
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                    // On Android 11 (API 30) and higher, apps need the MANAGE_EXTERNAL_STORAGE permission
+                    // to write to arbitrary locations on shared storage. Check if the permission is granted.
+                    if (android.os.Environment.isExternalStorageManager()) {
+                        Toast.makeText(MainActivity.this, R.string.permission_already_granted, Toast.LENGTH_SHORT).show();
+                    } else {
+                        // Direct the user to the system settings page where they can grant the permission
+                        try {
+                            android.content.Intent intent = new android.content.Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                                    android.net.Uri.parse("package:" + getPackageName()));
+                            startActivityForResult(intent, REQUEST_MANAGE_STORAGE);
+                        } catch (Exception ex) {
+                            // Fallback to general manage all files access permission page
+                            android.content.Intent intent = new android.content.Intent(android.provider.Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION);
+                            startActivityForResult(intent, REQUEST_MANAGE_STORAGE);
+                        }
+                    }
                 } else {
-                    Toast.makeText(MainActivity.this, R.string.permission_already_granted, Toast.LENGTH_SHORT).show();
+                    // For older API levels, request WRITE_EXTERNAL_STORAGE at runtime
+                    if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                            != PackageManager.PERMISSION_GRANTED) {
+                        ActivityCompat.requestPermissions(
+                                MainActivity.this,
+                                new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                                REQUEST_WRITE_STORAGE
+                        );
+                    } else {
+                        Toast.makeText(MainActivity.this, R.string.permission_already_granted, Toast.LENGTH_SHORT).show();
+                    }
                 }
             }
         });

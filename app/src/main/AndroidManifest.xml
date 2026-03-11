@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     package="eu.payzy.clicka">
 
     <!-- Permission required to bind an accessibility service -->
@@ -9,6 +10,11 @@
 
     <!-- Permission to read logs from external storage (required on older API levels) -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+
+    <!-- All files access permission for API 30+ to write outside app-specific directories -->
+    <uses-permission
+        android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        tools:ignore="ScopedStorage" />
 
     <application
         android:allowBackup="true"
