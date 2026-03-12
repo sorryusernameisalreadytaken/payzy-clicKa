@@ -65,12 +65,17 @@ public class MainActivity extends AppCompatActivity {
         }
         editPassword.setText(PrefsHelper.getPassword(this));
         editPin.setText(PrefsHelper.getPin(this));
+        // Load the allowed package filter from preferences.  If no value has been
+        // persisted yet then leave the field empty.  An empty value means all
+        // packages will be considered by the watchers.  Previously we pre‑filled
+        // this field with "gr.payzy" which caused the service to only operate
+        // on that package.  Removing the default makes the behaviour more
+        // flexible and avoids unwanted package restrictions.
         String savedAllowed = PrefsHelper.getAllowedPackages(this);
-        // If nothing saved yet, use gr.payzy as sensible default
-        if (savedAllowed == null || savedAllowed.isEmpty()) {
-            editAllowedPackages.setText("gr.payzy");
-        } else {
+        if (savedAllowed != null && !savedAllowed.isEmpty()) {
             editAllowedPackages.setText(savedAllowed);
+        } else {
+            editAllowedPackages.setText("");
         }
         // Display stored wallet and coins values
         String walletValue = PrefsHelper.getWalletValue(this);
@@ -129,9 +134,22 @@ public class MainActivity extends AppCompatActivity {
         recordButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                // Toggle the recording state.  When starting a new recording
+                // session we reset the writers in the accessibility service so
+                // that fresh log files are created.  Without resetting the
+                // writers the logger would continue to append to the previous
+                // files, and on some devices no new files would be created
+                // until the app data was cleared.
                 boolean recording = PrefsHelper.isRecording(MainActivity.this);
-                PrefsHelper.setRecording(MainActivity.this, !recording);
+                boolean newState = !recording;
+                PrefsHelper.setRecording(MainActivity.this, newState);
                 updateRecordButtonLabel(recordButton);
+                if (newState) {
+                    AccessibilityLoggerService service = AccessibilityLoggerService.getInstance();
+                    if (service != null) {
+                        service.resetWriters();
+                    }
+                }
             }
         });
 

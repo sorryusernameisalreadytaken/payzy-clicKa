@@ -38,6 +38,65 @@ public class AccessibilityLoggerService extends AccessibilityService {
     private FileWriter jsonWriter;
 
     /**
+     * Resets the CSV and JSON writers.  When a new recording session starts we
+     * want to close any open file handles and rotate the previous logs to
+     * prevent stale writers from blocking future writes.  This method renames
+     * existing log files with a timestamp suffix, clears the last event
+     * timestamp and sets the writers to {@code null} so that they are
+     * recreated on demand.  It can safely be called from the main thread.
+     */
+    public synchronized void resetWriters() {
+        // Close any existing writers
+        try {
+            if (csvWriter != null) {
+                csvWriter.close();
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "Error closing CSV writer", e);
+        }
+        try {
+            if (jsonWriter != null) {
+                jsonWriter.close();
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "Error closing JSON writer", e);
+        }
+        csvWriter = null;
+        jsonWriter = null;
+        // Rotate previous log files by renaming them with the current timestamp
+        try {
+            File baseDir = Environment.getExternalStorageDirectory();
+            File dir = new File(baseDir, "clicka/payzy");
+            if (!dir.exists()) {
+                dir.mkdirs();
+            }
+            long now = System.currentTimeMillis();
+            // rename CSV file if it exists
+            File csvFile = new File(dir, "events.csv");
+            if (csvFile.exists()) {
+                File dest = new File(dir, "events-" + now + ".csv");
+                boolean ok = csvFile.renameTo(dest);
+                if (!ok) {
+                    Log.w(TAG, "Could not rename CSV log file");
+                }
+            }
+            // rename JSONL file if it exists
+            File jsonFile = new File(dir, "events.jsonl");
+            if (jsonFile.exists()) {
+                File dest = new File(dir, "events-" + now + ".jsonl");
+                boolean ok = jsonFile.renameTo(dest);
+                if (!ok) {
+                    Log.w(TAG, "Could not rename JSON log file");
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error rotating log files", e);
+        }
+        // Reset the last event timestamp so that deltas start fresh
+        lastEventTimestamp = -1;
+    }
+
+    /**
      * Timestamp of the last recorded event. Used to compute deltas between events.
      */
     private long lastEventTimestamp = -1;
@@ -93,6 +152,13 @@ public class AccessibilityLoggerService extends AccessibilityService {
      * Unique identifier for the current coins watcher thread.
      */
     private volatile int coinsWatcherId = 0;
+
+    /**
+     * Records the timestamp of the last coin redemption attempt.  Used to
+     * prevent repeated redemption attempts in quick succession.  A value of
+     * zero means no redemption has been attempted yet.
+     */
+    private volatile long lastCoinsRedeemTimestamp = 0L;
 
     /**
      * Records the timestamp of the last successful login performed by the login watcher.
@@ -927,9 +993,12 @@ public class AccessibilityLoggerService extends AccessibilityService {
                                         PrefsHelper.setCoinsValue(this, value);
                                         MainActivity.updateCoinsValueStatic(value);
                                         showToast("Coins erkannt: " + value);
+                                        // Click the element to navigate into the coins screen
                                         if (n.isClickable()) {
                                             n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
                                         }
+                                        // If the user has enough coins, attempt to redeem them automatically.
+                                        maybeRedeemCoins(value);
                                         found = true;
                                         break;
                                     }
@@ -981,6 +1050,185 @@ public class AccessibilityLoggerService extends AccessibilityService {
             return full.substring(0, idx);
         }
         return full;
+    }
+
+    /**
+     * Evaluates whether a coin redemption should be attempted based on the
+     * detected balance.  If the numeric portion of {@code valueStr} is 50 or
+     * greater and at least five seconds have elapsed since the last attempt,
+     * a redemption is triggered on a background thread.  This method is a
+     * no‑op when the service is disabled or when the user has not supplied a
+     * PIN via the main UI.
+     *
+     * @param valueStr the raw numeric string extracted from the coins card
+     */
+    private void maybeRedeemCoins(String valueStr) {
+        if (valueStr == null) return;
+        // Remove any currency symbols or commas and parse as integer
+        String cleaned = valueStr.replaceAll("[^0-9]", "");
+        if (cleaned.isEmpty()) return;
+        int coins;
+        try {
+            coins = Integer.parseInt(cleaned);
+        } catch (NumberFormatException e) {
+            return;
+        }
+        if (coins < 50) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        // Only attempt redemption once every 5 seconds to avoid spamming
+        if ((now - lastCoinsRedeemTimestamp) < 5000) {
+            return;
+        }
+        lastCoinsRedeemTimestamp = now;
+        final int amount = coins;
+        final String pin = PrefsHelper.getPin(this);
+        if (pin == null || pin.isEmpty()) {
+            // Without a PIN we cannot complete the redemption.  Notify the user.
+            showToast("PIN nicht gesetzt – kann Coins nicht einlösen");
+            return;
+        }
+        // Run the redemption sequence in a background thread so as not to
+        // block the watcher loop.  The sequence waits briefly for the
+        // coins screen to load, fills in the desired amount, clicks the
+        // redeem button and enters the PIN when prompted.
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    // Give the UI a moment to transition into the coins screen
+                    Thread.sleep(1500);
+                    redeemCoins(amount, pin);
+                } catch (InterruptedException e) {
+                    // ignore
+                }
+            }
+        }).start();
+    }
+
+    /**
+     * Performs the UI actions necessary to redeem a specified number of coins.  This
+     * method searches for the first visible {@link android.widget.EditText} on
+     * screen, inputs the coin amount, finds a clickable node with the text
+     * "Einlösen" (case‑insensitive) and clicks it.  After the amount is
+     * submitted, it attempts to enter the user’s PIN into any visible text
+     * fields of length six.  This implementation is based on the recorded
+     * accessibility events provided by the user and may need adjustments for
+     * different app versions.
+     *
+     * @param amount the number of coins to redeem
+     * @param pin    the six‑digit PIN to authorise the redemption
+     */
+    private void redeemCoins(int amount, String pin) {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) {
+            return;
+        }
+        try {
+            // Step 1: find an input field (EditText) to enter the coin amount.  We look
+            // for the first EditText in the hierarchy.
+            AccessibilityNodeInfo amountField = findFirstEditText(root);
+            if (amountField != null) {
+                android.os.Bundle args = new android.os.Bundle();
+                args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, Integer.toString(amount));
+                amountField.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
+                amountField.recycle();
+                // Small pause after entering text
+                Thread.sleep(500);
+            }
+            // Step 2: find and click the redeem button.  We search for any clickable
+            // node whose visible text contains "einlösen" (case‑insensitive).
+            boolean clicked = false;
+            java.util.LinkedList<AccessibilityNodeInfo> queue = new java.util.LinkedList<>();
+            queue.add(AccessibilityNodeInfo.obtain(root));
+            while (!queue.isEmpty() && !clicked) {
+                AccessibilityNodeInfo n = queue.removeFirst();
+                try {
+                    if (n.isClickable()) {
+                        CharSequence txt = n.getText();
+                        CharSequence cd = n.getContentDescription();
+                        String combined = "";
+                        if (txt != null) combined += txt.toString();
+                        if (cd != null) combined += " " + cd.toString();
+                        if (combined.toLowerCase().contains("einlösen") || combined.toLowerCase().contains("einloesen")) {
+                            n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                            clicked = true;
+                            break;
+                        }
+                    }
+                    for (int i = 0; i < n.getChildCount(); i++) {
+                        AccessibilityNodeInfo child = n.getChild(i);
+                        if (child != null) {
+                            queue.addLast(child);
+                        }
+                    }
+                } finally {
+                    n.recycle();
+                }
+            }
+            // If we clicked the redeem button, wait for the PIN screen to appear
+            if (clicked) {
+                Thread.sleep(1000);
+                AccessibilityNodeInfo pinRoot = getRootInActiveWindow();
+                if (pinRoot != null) {
+                    try {
+                        // Attempt to enter the PIN.  Some PIN screens present six separate
+                        // input fields; others use a single hidden field.  We look for all
+                        // EditTexts and fill them sequentially.  If only one is found we
+                        // set the entire PIN at once.
+                        java.util.List<AccessibilityNodeInfo> pinFields = new java.util.ArrayList<>();
+                        collectEditTexts(pinRoot, pinFields);
+                        if (!pinFields.isEmpty()) {
+                            if (pinFields.size() == 1) {
+                                AccessibilityNodeInfo field = pinFields.get(0);
+                                android.os.Bundle a = new android.os.Bundle();
+                                a.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, pin);
+                                field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, a);
+                                field.recycle();
+                            } else {
+                                // If there are multiple fields, fill each with one digit
+                                for (int i = 0; i < pinFields.size() && i < pin.length(); i++) {
+                                    AccessibilityNodeInfo field = pinFields.get(i);
+                                    android.os.Bundle a = new android.os.Bundle();
+                                    a.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, Character.toString(pin.charAt(i)));
+                                    field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, a);
+                                    field.recycle();
+                                }
+                            }
+                        }
+                    } finally {
+                        pinRoot.recycle();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error during coin redemption", e);
+        } finally {
+            root.recycle();
+        }
+    }
+
+    /**
+     * Recursively collects all EditText nodes into the provided list.  This helper is
+     * used when entering the PIN for coin redemption.  Nodes are not recycled in
+     * this method; the caller must handle recycling.
+     *
+     * @param node the root of the hierarchy
+     * @param out  list to collect EditText nodes
+     */
+    private void collectEditTexts(AccessibilityNodeInfo node, java.util.List<AccessibilityNodeInfo> out) {
+        if (node == null) return;
+        CharSequence cls = node.getClassName();
+        if (cls != null && cls.toString().equals("android.widget.EditText")) {
+            out.add(node);
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+            if (child != null) {
+                collectEditTexts(child, out);
+            }
+        }
     }
 
     /*
