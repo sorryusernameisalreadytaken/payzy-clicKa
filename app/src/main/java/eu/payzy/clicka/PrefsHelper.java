@@ -24,6 +24,24 @@ public final class PrefsHelper {
     // Key for storing the comma-separated list of allowed package names used by watchers
     private static final String KEY_ALLOWED_PACKAGES = "allowed_packages";
 
+    // Keys for storing user‑defined thresholds.  These values allow the user
+    // to configure how much Guthaben (wallet balance) should remain in the
+    // wallet before an automatic top‑up is attempted and how many coins need
+    // to accumulate before a redemption watcher should run.  The values are
+    // stored as plain strings and parsed by the watchers.
+    private static final String KEY_MIN_WALLET = "min_wallet";
+    private static final String KEY_MIN_COINS = "min_coins";
+
+    // Key for storing the last processed transaction identifier.  When the
+    // transactions watcher runs it will stop scanning once it encounters
+    // this identifier again.  Persisting the last ID prevents duplicate
+    // entries when exporting the latest transactions to CSV.
+    private static final String KEY_LAST_TRANSACTION_ID = "last_transaction_id";
+
+    // Keys for storing thresholds for wallet top‑up and coin redemption
+    private static final String KEY_MIN_WALLET = "min_wallet";
+    private static final String KEY_MIN_COINS = "min_coins";
+
     private PrefsHelper() {
         // Prevent instantiation
     }
@@ -205,5 +223,114 @@ public final class PrefsHelper {
             parts[i] = parts[i].trim();
         }
         return parts;
+    }
+
+    /**
+     * Stores the minimum wallet balance as configured by the user.  The
+     * value should be a numeric string representing euros (e.g. "10.00").  An
+     * empty string indicates no automatic top‑up should occur.
+     */
+    public static void setMinWallet(Context context, String value) {
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        prefs.edit().putString(KEY_MIN_WALLET, value != null ? value : "").apply();
+    }
+
+    /**
+     * Retrieves the minimum wallet balance.  If not set, returns an empty
+     * string.  Parsing of this value into a numeric type is performed by
+     * watchers when needed.
+     */
+    public static String getMinWallet(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        return prefs.getString(KEY_MIN_WALLET, "");
+    }
+
+    /**
+     * Stores the minimum coin count required before the redemption watcher
+     * engages.  The string should represent an integer value (e.g. "50").
+     */
+    public static void setMinCoins(Context context, String value) {
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        prefs.edit().putString(KEY_MIN_COINS, value != null ? value : "").apply();
+    }
+
+    /**
+     * Retrieves the minimum coin count.  Returns an empty string when
+     * undefined.  Watchers handle parsing and defaulting behaviour.
+     */
+    public static String getMinCoins(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        return prefs.getString(KEY_MIN_COINS, "");
+    }
+
+    /**
+     * Stores the last processed transaction identifier.  This identifier is
+     * extracted from the transaction list by the transactions watcher.  It
+     * should uniquely identify a transaction in the Payzy app.
+     */
+    public static void setLastTransactionId(Context context, String id) {
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        prefs.edit().putString(KEY_LAST_TRANSACTION_ID, id != null ? id : "").apply();
+    }
+
+    /**
+     * Retrieves the last processed transaction identifier.  Returns an empty
+     * string if no transaction has been processed previously.
+     */
+    public static String getLastTransactionId(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        return prefs.getString(KEY_LAST_TRANSACTION_ID, "");
+    }
+
+    /**
+     * Stores the user‑defined minimum wallet balance (threshold at which a top‑up
+     * should be initiated) as a string.  The value may contain a comma or dot
+     * and will be parsed on demand.
+     *
+     * @param context a valid application or activity context
+     * @param value   the threshold to persist (may be empty)
+     */
+    public static void setMinWallet(Context context, String value) {
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        prefs.edit().putString(KEY_MIN_WALLET, value != null ? value : "").apply();
+    }
+
+    /**
+     * Retrieves the stored minimum wallet balance threshold.  Returns an empty
+     * string when no value has been stored.  Callers should handle parsing and
+     * provide sensible defaults when the returned value is empty.
+     *
+     * @param context a valid application or activity context
+     * @return the stored threshold or an empty string if not set
+     */
+    public static String getMinWallet(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        return prefs.getString(KEY_MIN_WALLET, "");
+    }
+
+    /**
+     * Stores the user‑defined minimum coin amount required to trigger an
+     * automatic redemption.  The value is stored as a string to allow empty
+     * values.  Callers should validate the string when reading.
+     *
+     * @param context a valid context
+     * @param value   the coin threshold to persist (may be empty)
+     */
+    public static void setMinCoins(Context context, String value) {
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        prefs.edit().putString(KEY_MIN_COINS, value != null ? value : "").apply();
+    }
+
+    /**
+     * Retrieves the stored minimum coin threshold.  Returns an empty string
+     * when no value has been stored.  Callers should provide a default when
+     * necessary.
+     *
+     * @param context a valid context
+     * @return the stored coin threshold or an empty string
+     */
+    public static String getMinCoins(Context context) {
+        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
+        return prefs.getString(KEY_MIN_COINS, "");
     }
 }

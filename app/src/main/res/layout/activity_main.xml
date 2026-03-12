@@ -67,6 +67,28 @@
         android:hint="@string/hint_allowed_packages"
         android:inputType="text" />
 
+    <!-- Input field for minimum wallet balance before auto top‑up.  The user
+         specifies the desired minimum euro balance in their wallet.  When
+         the actual balance falls below this value the auto top‑up watcher
+         will attempt to initiate a top‑up. -->
+    <EditText
+        android:id="@+id/edit_min_wallet"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:hint="@string/hint_min_wallet"
+        android:inputType="numberDecimal" />
+
+    <!-- Input field for minimum coins required before the redemption watcher
+         will attempt to redeem coins.  The value should be an integer. -->
+    <EditText
+        android:id="@+id/edit_min_coins"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:hint="@string/hint_min_coins"
+        android:inputType="number" />
+
     <!-- Button to save the entered password and PIN -->
     <Button
         android:id="@+id/button_save_credentials"
@@ -99,6 +121,30 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
         android:text="@string/button_coins_watcher_start" />
+
+    <!-- Wallet top‑up watcher toggle button -->
+    <Button
+        android:id="@+id/button_wallet_topup_watcher"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/button_wallet_topup_watcher_start" />
+
+    <!-- Coins redeem watcher toggle button -->
+    <Button
+        android:id="@+id/button_coins_redeem_watcher"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/button_coins_redeem_watcher_start" />
+
+    <!-- Transactions watcher toggle button -->
+    <Button
+        android:id="@+id/button_transactions_watcher"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/button_transactions_watcher_start" />
 
     <!-- Display for current wallet balance -->
     <TextView

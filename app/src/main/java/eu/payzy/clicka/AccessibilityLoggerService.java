@@ -154,6 +154,42 @@ public class AccessibilityLoggerService extends AccessibilityService {
     private volatile int coinsWatcherId = 0;
 
     /**
+     * Indicates whether the wallet top‑up watcher is currently active.  When true,
+     * the service monitors the wallet balance and attempts to initiate an
+     * auto top‑up when the balance falls below the configured threshold.
+     */
+    private volatile boolean walletTopupWatcherActive = false;
+
+    /**
+     * Unique identifier for the current wallet top‑up watcher thread.
+     */
+    private volatile int walletTopupWatcherId = 0;
+
+    /**
+     * Indicates whether the coins redemption watcher is active.  When true, the
+     * service monitors the coin balance and attempts to redeem coins once the
+     * balance meets or exceeds the configured minimum.
+     */
+    private volatile boolean coinsRedeemWatcherActive = false;
+
+    /**
+     * Unique identifier for the current coins redemption watcher thread.
+     */
+    private volatile int coinsRedeemWatcherId = 0;
+
+    /**
+     * Indicates whether the transactions watcher is active.  When true, the
+     * service scans the transaction list in the Payzy app, exports new
+     * transactions to a CSV file and updates the last processed transaction ID.
+     */
+    private volatile boolean transactionsWatcherActive = false;
+
+    /**
+     * Unique identifier for the current transactions watcher thread.
+     */
+    private volatile int transactionsWatcherId = 0;
+
+    /**
      * Records the timestamp of the last coin redemption attempt.  Used to
      * prevent repeated redemption attempts in quick succession.  A value of
      * zero means no redemption has been attempted yet.
@@ -402,6 +438,97 @@ public class AccessibilityLoggerService extends AccessibilityService {
                 @Override
                 public void run() {
                     runCoinsWatcherLoop(watcherId);
+                }
+            }).start();
+            return true;
+        }
+    }
+
+    /**
+     * Toggles the wallet top‑up watcher on or off. When enabled, the service
+     * continuously monitors the wallet balance and compares it against the
+     * configured minimum threshold.  When the balance falls below this
+     * threshold, the service attempts to initiate a top‑up by navigating to
+     * the wallet screen, entering the appropriate amount and confirming
+     * payment with the stored PIN.  When disabled, the scanning thread is
+     * cancelled.
+     *
+     * @return {@code true} if the watcher is now active, {@code false} if it
+     *         was stopped
+     */
+    public synchronized boolean toggleWalletTopupWatcher() {
+        if (walletTopupWatcherActive) {
+            walletTopupWatcherActive = false;
+            walletTopupWatcherId++;
+            showToast("Auto-Aufladen gestoppt");
+            return false;
+        } else {
+            walletTopupWatcherActive = true;
+            final int watcherId = ++walletTopupWatcherId;
+            showToast("Auto-Aufladen gestartet");
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    runWalletTopupWatcherLoop(watcherId);
+                }
+            }).start();
+            return true;
+        }
+    }
+
+    /**
+     * Toggles the coins redemption watcher on or off.  When enabled, the
+     * service monitors the coin balance and automatically attempts to redeem
+     * coins when the balance meets or exceeds the configured minimum.  The
+     * watcher will use the stored PIN to authorise the redemption.  When
+     * disabled, the scanning thread is cancelled.
+     *
+     * @return {@code true} if the watcher is now active; {@code false} if it
+     *         was stopped
+     */
+    public synchronized boolean toggleCoinsRedeemWatcher() {
+        if (coinsRedeemWatcherActive) {
+            coinsRedeemWatcherActive = false;
+            coinsRedeemWatcherId++;
+            showToast("Coins-Einlösen gestoppt");
+            return false;
+        } else {
+            coinsRedeemWatcherActive = true;
+            final int watcherId = ++coinsRedeemWatcherId;
+            showToast("Coins-Einlösen gestartet");
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    runCoinsRedeemWatcherLoop(watcherId);
+                }
+            }).start();
+            return true;
+        }
+    }
+
+    /**
+     * Toggles the transactions watcher on or off.  When enabled, the service
+     * scans the transaction history in the Payzy app, collects new
+     * transactions into a CSV and updates the last processed transaction ID.
+     * When disabled, the scanning thread is cancelled.
+     *
+     * @return {@code true} if the watcher is now active; {@code false} if it
+     *         was stopped
+     */
+    public synchronized boolean toggleTransactionsWatcher() {
+        if (transactionsWatcherActive) {
+            transactionsWatcherActive = false;
+            transactionsWatcherId++;
+            showToast("Transaktionen gestoppt");
+            return false;
+        } else {
+            transactionsWatcherActive = true;
+            final int watcherId = ++transactionsWatcherId;
+            showToast("Transaktionen gestartet");
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    runTransactionsWatcherLoop(watcherId);
                 }
             }).start();
             return true;
@@ -981,7 +1108,7 @@ public class AccessibilityLoggerService extends AccessibilityService {
                                 String ts = t != null ? t.toString() : "";
                                 String cs = cd != null ? cd.toString() : "";
                                 String lower = (ts + " " + cs).toLowerCase();
-                                if (lower.contains("coins")) {
+                                if (lower.contains("coins") || lower.contains("coin") || lower.contains("punkte")) {
                                     // Extract numeric portion
                                     String full = !ts.isEmpty() ? ts : cs;
                                     String value = extractNumericValue(full);
@@ -997,8 +1124,8 @@ public class AccessibilityLoggerService extends AccessibilityService {
                                         if (n.isClickable()) {
                                             n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
                                         }
-                                        // If the user has enough coins, attempt to redeem them automatically.
-                                        maybeRedeemCoins(value);
+                                        // Do not automatically redeem coins here.  Redemption logic
+                                        // is handled in the separate coins redemption watcher.
                                         found = true;
                                         break;
                                     }
@@ -1027,6 +1154,522 @@ public class AccessibilityLoggerService extends AccessibilityService {
             }
         }
         MainActivity.updateCoinsWatcherButtonStatic(false);
+    }
+
+    /**
+     * Continuously monitors the wallet balance and triggers an automatic top‑up
+     * when the balance falls below the user‑defined minimum.  The watcher
+     * navigates into the wallet screen, enters the difference between the
+     * desired minimum and the current balance and attempts to confirm the
+     * payment using the stored PIN.  Because UI layouts may vary between
+     * app versions, this implementation uses simple heuristics (first
+     * EditText, clickable buttons with text like "Aufladen", "Weiter" or
+     * "Bestätigen").  The loop terminates when the watcher is disabled
+     * or superseded by a newer instance.
+     *
+     * @param watcherId the identifier for this watcher instance
+     */
+    private void runWalletTopupWatcherLoop(int watcherId) {
+        while (walletTopupWatcherActive && watcherId == walletTopupWatcherId) {
+            // Determine configured minimum balance
+            String minStr = PrefsHelper.getMinWallet(this);
+            double minBalance = 0.0;
+            if (minStr != null && !minStr.trim().isEmpty()) {
+                try {
+                    minBalance = Double.parseDouble(minStr.replace(',', '.'));
+                } catch (NumberFormatException e) {
+                    minBalance = 0.0;
+                }
+            }
+            // If no threshold defined, skip processing
+            if (minBalance <= 0) {
+                try {
+                    Thread.sleep(2000);
+                } catch (InterruptedException ignored) {
+                }
+                continue;
+            }
+            // Get current wallet value from preferences
+            String currentStr = PrefsHelper.getWalletValue(this);
+            double currentBalance = 0.0;
+            if (currentStr != null && !currentStr.trim().isEmpty()) {
+                try {
+                    String cleaned = currentStr.replaceAll("[^0-9.,]", "").replace(',', '.');
+                    currentBalance = Double.parseDouble(cleaned);
+                } catch (NumberFormatException e) {
+                    currentBalance = 0.0;
+                }
+            }
+            // If the current balance is below threshold, attempt top‑up
+            if (currentBalance < minBalance) {
+                double deficit = minBalance - currentBalance;
+                showToast("Versuche Guthaben aufzuladen: aktuelles Guthaben=" + currentBalance + ", Ziel=" + minBalance);
+                try {
+                    performWalletTopup(deficit);
+                } catch (Exception e) {
+                    Log.e(TAG, "Fehler bei Auto-Aufladung", e);
+                }
+            }
+            try {
+                Thread.sleep(5000);
+            } catch (InterruptedException e) {
+                break;
+            }
+        }
+        MainActivity.updateWalletTopupWatcherButtonStatic(false);
+    }
+
+    /**
+     * Continuously monitors the coin balance and triggers an automatic
+     * redemption when the balance meets or exceeds the user‑defined minimum.
+     * The watcher waits for the coins screen to load and then calls
+     * redeemCoins().  A cooldown of five seconds prevents repeated
+     * redemptions.
+     *
+     * @param watcherId the identifier for this watcher instance
+     */
+    private void runCoinsRedeemWatcherLoop(int watcherId) {
+        while (coinsRedeemWatcherActive && watcherId == coinsRedeemWatcherId) {
+            String minStr = PrefsHelper.getMinCoins(this);
+            int minCoins = 0;
+            if (minStr != null && !minStr.trim().isEmpty()) {
+                try {
+                    minCoins = Integer.parseInt(minStr.trim());
+                } catch (NumberFormatException e) {
+                    minCoins = 0;
+                }
+            }
+            if (minCoins <= 0) {
+                try {
+                    Thread.sleep(2000);
+                } catch (InterruptedException ignored) {
+                }
+                continue;
+            }
+            String currentStr = PrefsHelper.getCoinsValue(this);
+            int currentCoins = 0;
+            if (currentStr != null && !currentStr.trim().isEmpty()) {
+                try {
+                    String cleaned = currentStr.replaceAll("[^0-9]", "");
+                    currentCoins = Integer.parseInt(cleaned);
+                } catch (NumberFormatException e) {
+                    currentCoins = 0;
+                }
+            }
+            if (currentCoins >= minCoins) {
+                long now = System.currentTimeMillis();
+                // Respect cooldown between attempts
+                if ((now - lastCoinsRedeemTimestamp) >= 5000) {
+                    lastCoinsRedeemTimestamp = now;
+                    final int amount = currentCoins;
+                    final String pin = PrefsHelper.getPin(this);
+                    if (pin == null || pin.isEmpty()) {
+                        showToast("PIN nicht gesetzt – kann Coins nicht einlösen");
+                    } else {
+                        showToast("Einlösen von " + amount + " Coins");
+                        new Thread(new Runnable() {
+                            @Override
+                            public void run() {
+                                try {
+                                    Thread.sleep(1500);
+                                    redeemCoins(amount, pin);
+                                } catch (InterruptedException ignored) {
+                                }
+                            }
+                        }).start();
+                    }
+                }
+            }
+            try {
+                Thread.sleep(3000);
+            } catch (InterruptedException e) {
+                break;
+            }
+        }
+        MainActivity.updateCoinsRedeemWatcherButtonStatic(false);
+    }
+
+    /**
+     * Continuously scans the transaction list within the Payzy app and writes
+     * new transactions to a CSV file.  The watcher will scroll the list
+     * downward and collect the textual content of each visible item.  Once
+     * the watcher encounters the last processed transaction ID (stored in
+     * preferences) it stops collecting.  The watcher persists the ID of the
+     * newest transaction at the start of each run.  If no new transactions
+     * are found, the watcher sleeps briefly and tries again.  Because
+     * transaction screens can vary, this implementation uses simple heuristics
+     * to detect list items (nodes containing a € symbol or the word "€").
+     *
+     * @param watcherId the identifier for this watcher instance
+     */
+    private void runTransactionsWatcherLoop(int watcherId) {
+        // Create a CSV file in the clicka/payzy directory
+        File baseDir = Environment.getExternalStorageDirectory();
+        File dir = new File(baseDir, "clicka/payzy");
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+        File csvFile = new File(dir, "transactions.csv");
+        while (transactionsWatcherActive && watcherId == transactionsWatcherId) {
+            // Determine last processed ID from prefs
+            String lastId = PrefsHelper.getLastTransactionId(this);
+            java.util.List<String[]> newRows = new java.util.ArrayList<>();
+            String newestId = null;
+            boolean reachedLastId = false;
+            // Attempt to collect transactions from current screen
+            AccessibilityNodeInfo root = getRootInActiveWindow();
+            if (root != null) {
+                try {
+                    CharSequence pkgCs = root.getPackageName();
+                    String pkg = pkgCs != null ? pkgCs.toString() : "";
+                    if (!isPackageAllowed(pkg)) {
+                        // Do not process if app not allowed
+                        // Wait a bit and retry
+                        try {
+                            Thread.sleep(1000);
+                        } catch (InterruptedException ignored) {
+                        }
+                        continue;
+                    }
+                    // BFS through visible nodes, capture rows containing €
+                    java.util.LinkedList<AccessibilityNodeInfo> queue = new java.util.LinkedList<>();
+                    queue.add(AccessibilityNodeInfo.obtain(root));
+                    java.util.Set<String> seenIds = new java.util.HashSet<>();
+                    while (!queue.isEmpty() && !reachedLastId) {
+                        AccessibilityNodeInfo n = queue.removeFirst();
+                        try {
+                            CharSequence t = n.getText();
+                            CharSequence cd = n.getContentDescription();
+                            String text = t != null ? t.toString() : "";
+                            String desc = cd != null ? cd.toString() : "";
+                            // We assume a transaction item contains a euro symbol or comma/period separated amount
+                            if (!text.isEmpty() && (text.contains("€") || text.matches(".*[0-9],[0-9]{2}.*"))) {
+                                // Build a row string: gather all visible text from node and children
+                                StringBuilder builder = new StringBuilder();
+                                gatherTexts(n, builder);
+                                String rowText = builder.toString().trim();
+                                // Determine a simple ID for this transaction: first 10 characters of row
+                                String id = rowText.length() > 10 ? rowText.substring(0, 10) : rowText;
+                                if (newestId == null) {
+                                    newestId = id;
+                                }
+                                if (id.equals(lastId)) {
+                                    reachedLastId = true;
+                                    break;
+                                }
+                                if (!seenIds.contains(id)) {
+                                    seenIds.add(id);
+                                    newRows.add(new String[]{id, rowText});
+                                }
+                            }
+                            for (int i = 0; i < n.getChildCount(); i++) {
+                                AccessibilityNodeInfo child = n.getChild(i);
+                                if (child != null) {
+                                    queue.addLast(child);
+                                }
+                            }
+                        } finally {
+                            n.recycle();
+                        }
+                    }
+                    // If we didn't find any items, scroll down to load more
+                    if (!reachedLastId && newRows.isEmpty()) {
+                        // attempt to scroll forward on any scrollable node
+                        boolean scrolled = scrollForward(root);
+                        // Wait a moment before scanning again
+                        try {
+                            Thread.sleep(1000);
+                        } catch (InterruptedException ignored) {
+                        }
+                        if (!scrolled) {
+                            // Unable to scroll; break to prevent infinite loop
+                            reachedLastId = true;
+                        }
+                    }
+                } finally {
+                    root.recycle();
+                }
+            }
+            // Persist new rows to CSV
+            if (!newRows.isEmpty()) {
+                try {
+                    java.io.FileWriter writer = new java.io.FileWriter(csvFile, true);
+                    for (String[] row : newRows) {
+                        writer.append(row[0]).append(",").append(row[1].replaceAll(",", ";")).append("\n");
+                    }
+                    writer.flush();
+                    writer.close();
+                    // Update newest transaction ID to prefs for next run
+                    PrefsHelper.setLastTransactionId(this, newestId);
+                    showToast(newRows.size() + " neue Transaktionen gespeichert");
+                } catch (Exception e) {
+                    Log.e(TAG, "Fehler beim Schreiben von Transaktionen", e);
+                }
+            }
+            try {
+                Thread.sleep(5000);
+            } catch (InterruptedException e) {
+                break;
+            }
+        }
+        MainActivity.updateTransactionsWatcherButtonStatic(false);
+    }
+
+    /**
+     * Navigates through the Payzy wallet UI to perform a top‑up of the
+     * specified amount.  The method locates the wallet card, clicks it,
+     * clicks an "Aufladen" button, fills in the amount in the first
+     * available EditText, selects the first available payment method (if
+     * necessary) and attempts to confirm the transaction via a button
+     * labelled "Weiter" or "Bestätigen".  Finally, it enters the stored
+     * PIN if prompted.  This implementation is based on the user‑provided
+     * accessibility logs and may need adjustments for different versions of
+     * the Payzy app.
+     *
+     * @param amount the amount to top up in euros
+     */
+    private void performWalletTopup(double amount) {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) {
+            return;
+        }
+        try {
+            // Step 1: find and click a node containing "Guthaben" to open wallet details
+            boolean walletOpened = false;
+            java.util.LinkedList<AccessibilityNodeInfo> queue = new java.util.LinkedList<>();
+            queue.add(AccessibilityNodeInfo.obtain(root));
+            while (!queue.isEmpty() && !walletOpened) {
+                AccessibilityNodeInfo n = queue.removeFirst();
+                try {
+                    String combined = "";
+                    CharSequence t = n.getText();
+                    CharSequence cd = n.getContentDescription();
+                    if (t != null) combined += t.toString();
+                    if (cd != null) combined += " " + cd.toString();
+                    if (combined.toLowerCase().contains("guthaben")) {
+                        if (n.isClickable()) {
+                            n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                            walletOpened = true;
+                            break;
+                        }
+                    }
+                    for (int i = 0; i < n.getChildCount(); i++) {
+                        AccessibilityNodeInfo child = n.getChild(i);
+                        if (child != null) {
+                            queue.addLast(child);
+                        }
+                    }
+                } finally {
+                    n.recycle();
+                }
+            }
+            if (!walletOpened) {
+                return;
+            }
+            // Wait for wallet details screen to load
+            Thread.sleep(1500);
+            AccessibilityNodeInfo detailsRoot = getRootInActiveWindow();
+            if (detailsRoot == null) return;
+            try {
+                // Step 2: find and click a button labelled "Aufladen"
+                boolean topupButtonClicked = false;
+                java.util.LinkedList<AccessibilityNodeInfo> queue2 = new java.util.LinkedList<>();
+                queue2.add(AccessibilityNodeInfo.obtain(detailsRoot));
+                while (!queue2.isEmpty() && !topupButtonClicked) {
+                    AccessibilityNodeInfo n = queue2.removeFirst();
+                    try {
+                        if (n.isClickable()) {
+                            String text = n.getText() != null ? n.getText().toString().toLowerCase() : "";
+                            String cdStr = n.getContentDescription() != null ? n.getContentDescription().toString().toLowerCase() : "";
+                            if (text.contains("aufladen") || cdStr.contains("aufladen")) {
+                                n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                                topupButtonClicked = true;
+                                break;
+                            }
+                        }
+                        for (int i = 0; i < n.getChildCount(); i++) {
+                            AccessibilityNodeInfo child = n.getChild(i);
+                            if (child != null) {
+                                queue2.addLast(child);
+                            }
+                        }
+                    } finally {
+                        n.recycle();
+                    }
+                }
+                if (!topupButtonClicked) {
+                    return;
+                }
+                // Wait for top‑up sheet to appear
+                Thread.sleep(1500);
+                AccessibilityNodeInfo topupRoot = getRootInActiveWindow();
+                if (topupRoot == null) return;
+                try {
+                    // Step 3: find first EditText and enter amount
+                    AccessibilityNodeInfo amountField = findFirstEditText(topupRoot);
+                    if (amountField != null) {
+                        android.os.Bundle args = new android.os.Bundle();
+                        // Format amount with two decimals using comma as decimal separator
+                        String formatted = String.format(java.util.Locale.GERMANY, "%.2f", amount);
+                        args.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, formatted);
+                        amountField.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args);
+                        amountField.recycle();
+                        Thread.sleep(500);
+                    }
+                    // Step 4: select the first payment method if a list of cards is present
+                    boolean cardSelected = false;
+                    java.util.LinkedList<AccessibilityNodeInfo> queue3 = new java.util.LinkedList<>();
+                    queue3.add(AccessibilityNodeInfo.obtain(topupRoot));
+                    while (!queue3.isEmpty() && !cardSelected) {
+                        AccessibilityNodeInfo n = queue3.removeFirst();
+                        try {
+                            String text = n.getText() != null ? n.getText().toString() : "";
+                            String cdStr = n.getContentDescription() != null ? n.getContentDescription().toString() : "";
+                            String combined = (text + " " + cdStr).toLowerCase();
+                            // The recorded logs show masked card numbers like "**** 1510"; we simply
+                            // select the first clickable item containing "****" or the word
+                            // "kredit"
+                            if ((combined.contains("****") || combined.contains("kredit")) && n.isClickable()) {
+                                n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                                cardSelected = true;
+                                break;
+                            }
+                            for (int i = 0; i < n.getChildCount(); i++) {
+                                AccessibilityNodeInfo child = n.getChild(i);
+                                if (child != null) {
+                                    queue3.addLast(child);
+                                }
+                            }
+                        } finally {
+                            n.recycle();
+                        }
+                    }
+                    // Step 5: click a button labelled "Weiter" or "Bestätigen"
+                    boolean confirmClicked = false;
+                    java.util.LinkedList<AccessibilityNodeInfo> queue4 = new java.util.LinkedList<>();
+                    queue4.add(AccessibilityNodeInfo.obtain(topupRoot));
+                    while (!queue4.isEmpty() && !confirmClicked) {
+                        AccessibilityNodeInfo n = queue4.removeFirst();
+                        try {
+                            if (n.isClickable()) {
+                                String text = n.getText() != null ? n.getText().toString().toLowerCase() : "";
+                                String cdStr = n.getContentDescription() != null ? n.getContentDescription().toString().toLowerCase() : "";
+                                if (text.contains("weiter") || text.contains("bestätigen") || cdStr.contains("weiter") || cdStr.contains("bestätigen")) {
+                                    n.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                                    confirmClicked = true;
+                                    break;
+                                }
+                            }
+                            for (int i = 0; i < n.getChildCount(); i++) {
+                                AccessibilityNodeInfo child = n.getChild(i);
+                                if (child != null) {
+                                    queue4.addLast(child);
+                                }
+                            }
+                        } finally {
+                            n.recycle();
+                        }
+                    }
+                    if (confirmClicked) {
+                        // Wait and then enter the PIN on the next screen
+                        Thread.sleep(1000);
+                        String pin = PrefsHelper.getPin(this);
+                        if (pin != null && !pin.isEmpty()) {
+                            AccessibilityNodeInfo pinRoot = getRootInActiveWindow();
+                            if (pinRoot != null) {
+                                try {
+                                    java.util.List<AccessibilityNodeInfo> pinFields = new java.util.ArrayList<>();
+                                    collectEditTexts(pinRoot, pinFields);
+                                    if (!pinFields.isEmpty()) {
+                                        if (pinFields.size() == 1) {
+                                            AccessibilityNodeInfo field = pinFields.get(0);
+                                            android.os.Bundle a = new android.os.Bundle();
+                                            a.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, pin);
+                                            field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, a);
+                                            field.recycle();
+                                        } else {
+                                            for (int i = 0; i < pinFields.size() && i < pin.length(); i++) {
+                                                AccessibilityNodeInfo field = pinFields.get(i);
+                                                android.os.Bundle a = new android.os.Bundle();
+                                                a.putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, Character.toString(pin.charAt(i)));
+                                                field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, a);
+                                                field.recycle();
+                                            }
+                                        }
+                                    }
+                                } finally {
+                                    pinRoot.recycle();
+                                }
+                            }
+                        }
+                    }
+                } finally {
+                    topupRoot.recycle();
+                }
+            } finally {
+                detailsRoot.recycle();
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Fehler bei performWalletTopup", e);
+        } finally {
+            root.recycle();
+        }
+    }
+
+    /**
+     * Recursively appends the text and content description of a node and its
+     * children to the provided StringBuilder.  Used by the transactions
+     * watcher to assemble a single line of text for each transaction item.
+     */
+    private void gatherTexts(AccessibilityNodeInfo node, StringBuilder out) {
+        if (node == null) return;
+        CharSequence t = node.getText();
+        CharSequence cd = node.getContentDescription();
+        if (t != null) {
+            out.append(t.toString()).append(" ");
+        }
+        if (cd != null) {
+            out.append(cd.toString()).append(" ");
+        }
+        for (int i = 0; i < node.getChildCount(); i++) {
+            AccessibilityNodeInfo child = node.getChild(i);
+            if (child != null) {
+                gatherTexts(child, out);
+            }
+        }
+    }
+
+    /**
+     * Attempts to scroll forward on any scrollable view within the hierarchy.
+     * Returns true if a scroll action was performed.  This helper is used by
+     * the transactions watcher when additional list items may be present off
+     * screen.
+     */
+    private boolean scrollForward(AccessibilityNodeInfo root) {
+        if (root == null) return false;
+        java.util.LinkedList<AccessibilityNodeInfo> queue = new java.util.LinkedList<>();
+        queue.add(AccessibilityNodeInfo.obtain(root));
+        boolean scrolled = false;
+        while (!queue.isEmpty() && !scrolled) {
+            AccessibilityNodeInfo n = queue.removeFirst();
+            try {
+                if (n.isScrollable()) {
+                    scrolled = n.performAction(AccessibilityNodeInfo.ACTION_SCROLL_FORWARD);
+                    if (scrolled) {
+                        break;
+                    }
+                }
+                for (int i = 0; i < n.getChildCount(); i++) {
+                    AccessibilityNodeInfo child = n.getChild(i);
+                    if (child != null) {
+                        queue.addLast(child);
+                    }
+                }
+            } finally {
+                n.recycle();
+            }
+        }
+        return scrolled;
     }
 
     /**

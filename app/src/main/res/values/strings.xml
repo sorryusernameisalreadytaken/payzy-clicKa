@@ -47,4 +47,16 @@
     <string name="label_wallet">Guthaben</string>
     <string name="label_coins">Coins</string>
     <string name="hint_allowed_packages">App-IDs (durch Komma getrennt)</string>
+
+    <!-- Hints for new threshold fields -->
+    <string name="hint_min_wallet">Min. Guthaben für Auto-Aufladung (€)</string>
+    <string name="hint_min_coins">Min. Coins für Einlösen</string>
+
+    <!-- Buttons for wallet top‑up, coin redemption and transactions watchers -->
+    <string name="button_wallet_topup_watcher_start">Auto-Aufladen starten</string>
+    <string name="button_wallet_topup_watcher_stop">Auto-Aufladen stoppen</string>
+    <string name="button_coins_redeem_watcher_start">Coins-Einlösen starten</string>
+    <string name="button_coins_redeem_watcher_stop">Coins-Einlösen stoppen</string>
+    <string name="button_transactions_watcher_start">Transaktionen exportieren</string>
+    <string name="button_transactions_watcher_stop">Transaktionen stoppen</string>
 </resources>
