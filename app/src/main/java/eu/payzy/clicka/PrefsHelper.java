@@ -38,9 +38,9 @@ public final class PrefsHelper {
     // entries when exporting the latest transactions to CSV.
     private static final String KEY_LAST_TRANSACTION_ID = "last_transaction_id";
 
-    // Keys for storing thresholds for wallet top‑up and coin redemption
-    private static final String KEY_MIN_WALLET = "min_wallet";
-    private static final String KEY_MIN_COINS = "min_coins";
+    //
+    // Duplicate declarations removed.  The threshold keys are defined above and
+    // reused throughout this helper.  Do not redeclare them.
 
     private PrefsHelper() {
         // Prevent instantiation
@@ -282,55 +282,4 @@ public final class PrefsHelper {
         return prefs.getString(KEY_LAST_TRANSACTION_ID, "");
     }
 
-    /**
-     * Stores the user‑defined minimum wallet balance (threshold at which a top‑up
-     * should be initiated) as a string.  The value may contain a comma or dot
-     * and will be parsed on demand.
-     *
-     * @param context a valid application or activity context
-     * @param value   the threshold to persist (may be empty)
-     */
-    public static void setMinWallet(Context context, String value) {
-        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
-        prefs.edit().putString(KEY_MIN_WALLET, value != null ? value : "").apply();
-    }
-
-    /**
-     * Retrieves the stored minimum wallet balance threshold.  Returns an empty
-     * string when no value has been stored.  Callers should handle parsing and
-     * provide sensible defaults when the returned value is empty.
-     *
-     * @param context a valid application or activity context
-     * @return the stored threshold or an empty string if not set
-     */
-    public static String getMinWallet(Context context) {
-        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
-        return prefs.getString(KEY_MIN_WALLET, "");
-    }
-
-    /**
-     * Stores the user‑defined minimum coin amount required to trigger an
-     * automatic redemption.  The value is stored as a string to allow empty
-     * values.  Callers should validate the string when reading.
-     *
-     * @param context a valid context
-     * @param value   the coin threshold to persist (may be empty)
-     */
-    public static void setMinCoins(Context context, String value) {
-        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
-        prefs.edit().putString(KEY_MIN_COINS, value != null ? value : "").apply();
-    }
-
-    /**
-     * Retrieves the stored minimum coin threshold.  Returns an empty string
-     * when no value has been stored.  Callers should provide a default when
-     * necessary.
-     *
-     * @param context a valid context
-     * @return the stored coin threshold or an empty string
-     */
-    public static String getMinCoins(Context context) {
-        SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
-        return prefs.getString(KEY_MIN_COINS, "");
-    }
 }
